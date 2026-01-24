@@ -8,6 +8,8 @@ SuperSay is a professional, set-and-forget utility that transforms any text on y
 ![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-007ACC?style=for-the-badge&logo=swift)
 
+<img src="assets/SuperSay.png" width="100%" alt="SuperSay Dashboard" />
+
 ---
 
 ## ✨ Key Features
