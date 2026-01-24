@@ -1,44 +1,41 @@
-# SuperSay TTS Backend
+# SuperSay Backend (Python)
 
-**The high-performance AI engine for SuperSay.**
+The inference engine powering SuperSay. Built with **FastAPI** and **ONNX Runtime**.
 
-This is a FastAPI-based server that wraps the [Kokoro TTS](https://huggingface.co/hexgrad/Kokoro-82M) model in an ONNX runtime. It handles text sanitization, parallel chunk generation, and digital volume amplification.
+## 🛠️ Setup
 
-## 📦 Requirements
-
-* Python 3.11+
-* [uv](https://github.com/astral-sh/uv) (Highly recommended)
-* `kokoro-v1.0.onnx`
-* `voices-v1.0.bin`
-
-## 🚀 Quick Start
+We recommend using [uv](https://github.com/astral-sh/uv) for lightning-fast dependency management.
 
 ```bash
-# Install dependencies and start the server
-uv run main.py
+# 1. Install dependencies
+uv sync
+
+# 2. Download Models (Required)
+# Place these in the backend/ root
+# - kokoro-v1.0.onnx
+# - voices-v1.0.bin
 ```
 
-## 🛠️ API Endpoints
+## 🔌 API Reference
 
 ### `POST /speak`
 
-Generates high-fidelity WAV audio from text.
+Generates audio from text.
 
-* **Request Body**:
-    * `text`: The string to speak.
-    * `voice`: (Optional) Voice tag (e.g., `af_bella`).
-    * `speed`: (Optional) 0.5 to 2.0.
-    * `volume`: (Optional) 0.0 to 1.5.
-    * `lang`: (Optional) Language code (`en-us`, `ja-jp`, etc.).
+**Payload:**
+```json
+{
+  "text": "Hello world",
+  "voice": "af_bella",
+  "speed": 1.0,
+  "volume": 1.0
+}
+```
+
+**Response:**
+*   `200 OK`: `audio/wav` binary stream.
+*   `500 Error`: Text too long or model failure.
 
 ### `GET /health`
 
-Returns the status of the model and server.
-
-### `GET /voices`
-
-Returns a list of all available voices in the binary.
-
-## 🏗️ Architecture
-
-The backend is designed for **parallelism**. Large blocks of text are sent to the backend, which are then split by the Swift client into chunks. The backend processes these chunks concurrently to reduce the "Time to First Word."
+Used by the Swift frontend to check if the server is ready to accept requests.
