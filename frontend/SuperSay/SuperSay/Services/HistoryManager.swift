@@ -1,7 +1,7 @@
 import Foundation
 import Combine
 
-class PersistenceService: ObservableObject {
+class HistoryManager: ObservableObject {
     @Published var history: [HistoryEntry] = []
     
     private let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("history.json")

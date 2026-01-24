@@ -1,12 +1,11 @@
 import SwiftUI
 
 struct SuperSayWindow: View {
-    @EnvironmentObject var dashboardVM: DashboardViewModel
+    @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var audio: AudioService
-    @EnvironmentObject var settings: SettingsViewModel
-    @EnvironmentObject var persistence: PersistenceService
+    @EnvironmentObject var history: HistoryManager
     @Environment(\.colorScheme) var colorScheme
-    @State private var selectedTab: String? = "home"
+    // @State private var selectedTab: String? = "home" // Managed by VM now
     
     var body: some View {
         NavigationSplitView {
@@ -30,7 +29,7 @@ struct SuperSayWindow: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
                 
-                List(selection: $selectedTab) {
+                List(selection: $vm.selectedTab) {
                     Section("Library") {
                         NavigationLink(value: "home") { Label("Now Playing", systemImage: "play.circle.fill") }
                         NavigationLink(value: "library") { Label("Audiobooks", systemImage: "book.closed.fill") }
@@ -86,7 +85,7 @@ struct SuperSayWindow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // FLOATING MINI PLAYER (Global) - Hide when on main dashboard to avoid duplicate bars
-                if (dashboardVM.status == .speaking || dashboardVM.status == .paused) && selectedTab != "home" {
+                if (vm.status == .speaking || vm.status == .paused) && vm.selectedTab != "home" {
                     miniPlayerHUD
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -94,12 +93,12 @@ struct SuperSayWindow: View {
             .background(adaptiveBackdrop)
         }
         .frame(minWidth: 1000, minHeight: 750)
-        .preferredColorScheme(settings.appTheme == "system" ? nil : (settings.appTheme == "dark" ? .dark : .light))
+        // .preferredColorScheme(settings.appTheme == "system" ? nil : (settings.appTheme == "dark" ? .dark : .light))
     }
     
     @ViewBuilder
     private var detailContent: some View {
-        switch selectedTab {
+        switch vm.selectedTab {
         case "home": MainDashboardView()
         case "library": LibraryView()
         case "history": VaultView()
@@ -111,10 +110,10 @@ struct SuperSayWindow: View {
     private var miniPlayerHUD: some View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(dashboardVM.status == .speaking ? "SPEAKING" : "PAUSED")
+                Text(vm.status == .speaking ? "SPEAKING" : "PAUSED")
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(.cyan)
-                Text(persistence.history.first?.text ?? "Reading...")
+                Text(history.history.first?.text ?? "Reading...")
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
             }

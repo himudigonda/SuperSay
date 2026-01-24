@@ -1,14 +1,14 @@
 import SwiftUI
 
 struct VaultView: View {
-    @EnvironmentObject var persistence: PersistenceService
+    @EnvironmentObject var history: HistoryManager
     @EnvironmentObject var dashboardVM: DashboardViewModel
     @State private var searchText = ""
     @State private var showOnlyFavorites = false
     
     // Group entries by day
     private var groupedEntries: [(Date, [HistoryEntry])] {
-        let sorted = persistence.history.filter { entry in
+        let sorted = history.history.filter { entry in
             let matchesSearch = searchText.isEmpty || entry.text.localizedCaseInsensitiveContains(searchText)
             let matchesFavorite = !showOnlyFavorites || entry.isFavorite
             return matchesSearch && matchesFavorite
@@ -32,13 +32,13 @@ struct VaultView: View {
                         VaultEntryRow(entry: entry)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
-                                    persistence.delete(entry: entry)
+                                    history.delete(entry: entry)
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
                                 
                                 Button {
-                                    persistence.toggleFavorite(entry: entry)
+                                    history.toggleFavorite(entry: entry)
                                 } label: {
                                     Label(entry.isFavorite ? "Unstar" : "Star", systemImage: entry.isFavorite ? "star.slash" : "star.fill")
                                 }
@@ -62,12 +62,12 @@ struct VaultView: View {
                     .help("Show starred snippets only")
                     
                     Button(role: .destructive) {
-                        persistence.clearHistory()
+                        history.clearHistory()
                     } label: {
                         Label("Clear All", systemImage: "trash.slash")
                     }
                     .help("Clear entire history")
-                    .disabled(persistence.history.isEmpty)
+                    .disabled(history.history.isEmpty)
                 }
             }
         }
@@ -75,7 +75,7 @@ struct VaultView: View {
 }
 
 struct VaultEntryRow: View {
-    @EnvironmentObject var persistence: PersistenceService
+    @EnvironmentObject var history: HistoryManager
     @EnvironmentObject var dashboardVM: DashboardViewModel
     let entry: HistoryEntry
     
@@ -107,7 +107,7 @@ struct VaultEntryRow: View {
                 Task { await dashboardVM.speak(text: entry.text) } 
             }
             Button(entry.isFavorite ? "Unstar" : "Star") {
-                persistence.toggleFavorite(entry: entry)
+                history.toggleFavorite(entry: entry)
             }
             Button("Copy") { 
                 NSPasteboard.general.clearContents()
@@ -115,7 +115,7 @@ struct VaultEntryRow: View {
             }
             Divider()
             Button(role: .destructive) {
-                persistence.delete(entry: entry)
+                history.delete(entry: entry)
             } label: {
                 Label("Delete", systemImage: "trash")
             }

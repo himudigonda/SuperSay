@@ -9,7 +9,7 @@ struct BookPage: Identifiable {
 }
 
 @MainActor
-class PDFEngine: ObservableObject {
+class PDFService: ObservableObject {
     @Published var pages: [BookPage] = []
     @Published var title: String = ""
     

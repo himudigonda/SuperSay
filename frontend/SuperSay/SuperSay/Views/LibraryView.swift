@@ -2,59 +2,43 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct LibraryView: View {
-    @EnvironmentObject var store: SuperSayStore
+    @EnvironmentObject var pdf: PDFService
+    @EnvironmentObject var vm: DashboardViewModel
     @State private var isHovering = false
     
     var body: some View {
-        VStack(spacing: 0) {
-            if store.pdf.pages.isEmpty {
-                // DROP ZONE
+        VStack {
+            if pdf.pages.isEmpty {
+                // Drop Zone
                 VStack(spacing: 20) {
-                    Image(systemName: "doc.badge.plus")
-                        .font(.system(size: 60))
-                        .foregroundStyle(.cyan.gradient)
-                    
-                    Text("Drop a PDF here to begin")
-                        .font(.headline)
-                        .foregroundStyle(.secondary)
+                    Image(systemName: "doc.badge.plus").font(.system(size: 60))
+                    Text("Drop PDF").font(.headline)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(RoundedRectangle(cornerRadius: 20).strokeBorder(style: StrokeStyle(lineWidth: 2, dash: [10])))
-                .padding(40)
-                .onDrop(of: [.pdf], isTargeted: $isHovering) { providers in
+                .onDrop(of: [UTType.pdf], isTargeted: $isHovering) { providers in
                     guard let provider = providers.first else { return false }
                     _ = provider.loadObject(ofClass: URL.self) { url, _ in
-                        if let url = url {
-                            DispatchQueue.main.async { store.pdf.load(url: url) }
-                        }
+                        if let url = url { DispatchQueue.main.async { pdf.load(url: url) } }
                     }
                     return true
                 }
             } else {
-                // BOOK PLAYER
+                // List
                 HStack {
-                    Text(store.pdf.title).font(.headline).lineLimit(1)
+                    Text(pdf.title).font(.headline)
                     Spacer()
-                    Button("Clear Library") { store.pdf.pages = [] }
-                        .buttonStyle(.link).foregroundColor(.red)
-                }
-                .padding()
-                .background(.ultraThinMaterial)
+                    Button("Clear") { pdf.pages = [] }
+                }.padding()
                 
-                List(store.pdf.pages) { page in
+                List(pdf.pages) { page in
                     HStack {
-                        Text("Page \(page.index)").font(.system(.body, design: .monospaced)).frame(width: 70, alignment: .leading)
-                        Text(page.text).lineLimit(1).font(.caption).foregroundColor(.secondary)
+                        Text("Page \(page.index)")
                         Spacer()
-                        Button {
-                            Task { await store.speakSelection(text: page.text) }
-                        } label: {
-                            Image(systemName: "play.circle.fill").font(.title3).foregroundColor(.cyan)
+                        Button { Task { await vm.speakSelection(text: page.text) } } label: {
+                            Image(systemName: "play.circle.fill")
                         }.buttonStyle(.plain)
                     }
-                    .padding(.vertical, 4)
                 }
-                .scrollContentBackground(.hidden)
             }
         }
     }

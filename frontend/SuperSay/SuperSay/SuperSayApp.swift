@@ -2,90 +2,56 @@ import SwiftUI
 
 @main
 struct SuperSayApp: App {
-    // 1. Initialize Services
-    private let backend = BackendService()
-    private let system = SystemService()
-    private let audio = AudioService()
-    private let persistence = PersistenceService()
-    private let launcher = LaunchService()
+    // 1. Single Sources of Truth
+    @StateObject private var audio = AudioService()
+    @StateObject private var history = HistoryManager()
+    @StateObject private var pdf = PDFService()
+    @StateObject private var launchManager = LaunchManager()
     
-    // 2. Initialize ViewModels (StateObjects so they persist)
+    // 2. Logic Controller
     @StateObject private var dashboardVM: DashboardViewModel
-    @StateObject private var settingsVM = SettingsViewModel()
     
     init() {
+        // We create the dependencies first
+        let _backend = BackendService()
+        let _system = SystemService()
+        let _audio = AudioService()
+        let _history = HistoryManager()
+        
+        // We inject them into the VM
         let vm = DashboardViewModel(
-            backend: backend,
-            system: system,
-            audio: audio,
-            persistence: persistence
+            backend: _backend,
+            system: _system,
+            audio: _audio,
+            history: _history
         )
+        
+        // We set the StateObjects
         _dashboardVM = StateObject(wrappedValue: vm)
+        _audio = StateObject(wrappedValue: _audio)
+        _history = StateObject(wrappedValue: _history)
     }
     
     var body: some Scene {
-        // THE MAIN MEDIA APP
         WindowGroup(id: "dashboard") {
-            // Update SuperSayWindow to take the VM instead of 'store'
-            // For this phase, we inject the VM as an EnvironmentObject
             SuperSayWindow()
                 .environmentObject(dashboardVM)
-                // We inject 'audio' separately because some views might read it directly
-                .environmentObject(audio) 
-                .environmentObject(persistence)
-                .environmentObject(settingsVM)
-                .environmentObject(launcher)
+                .environmentObject(audio)
+                .environmentObject(history)
+                .environmentObject(pdf)
+                .environmentObject(launchManager)
         }
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["dashboard"])
         
-        // THE QUICK ACCESS MENU BAR (Native HUD)
         MenuBarExtra {
             Button("Speak Selection") { Task { await dashboardVM.speakSelection() } }
-                // Global hotkey handled by KeyboardShortcuts
-            
-            Button("Stop Playback") { 
-                dashboardVM.audio.stop()
-                dashboardVM.status = .ready
-            }
-                // Global hotkey handled by KeyboardShortcuts
-
-            Button(dashboardVM.audio.isPlaying ? "Pause" : "Resume") { dashboardVM.audio.togglePause() }
-                .keyboardShortcut("/", modifiers: [.command, .shift])
-
-            // Button("Export to Desktop") { Task { await dashboardVM.exportToDesktop() } }
-            //    .keyboardShortcut("/", modifiers: [.control, .command, .shift])
-            
-            Divider()
-            
-            Button("Open Dashboard") {
-                if let url = URL(string: "supersay://dashboard") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            
+            Button("Stop") { audio.stop() }
             Button("Quit") { 
-                Task { await backend.stop() }
                 NSApplication.shared.terminate(nil) 
             }
         } label: {
-            HStack(spacing: 5) {
-                // Dynamic Icon based on state
-                switch dashboardVM.status {
-                case .grabbing: Text("🔍")
-                case .thinking: Text("🧠")
-                case .speaking: Text("🗣️")
-                case .paused:   Text("⏸️")
-                case .error:    Text("⚠️")
-                default:        Image(systemName: "waveform.circle.fill")
-                }
-                
-                // Real-time progress in menu bar
-                if dashboardVM.status == .speaking {
-                    Text("\(Int(dashboardVM.audio.progress * 100))%")
-                        .font(.system(size: 10, design: .monospaced))
-                }
-            }
+            Image(systemName: "waveform.circle.fill")
         }
     }
 }

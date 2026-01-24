@@ -5,7 +5,7 @@ import Combine
 class LaunchManager: ObservableObject {
     @Published var isLaunchAtLoginEnabled: Bool {
         didSet {
-            toggleLaunchAtLogin()
+            updateLoginItem()
         }
     }
     

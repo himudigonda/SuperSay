@@ -7,11 +7,13 @@ class DashboardViewModel: ObservableObject {
     private let backend: BackendService
     private let system: SystemService
     let audio: AudioService
-    private let persistence: PersistenceService
+    private let history: HistoryManager
     
     // State
     @Published var status: AppStatus = .ready
     @Published var isBackendOnline = false
+    @Published var selectedTab: String? = "home"
+    
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
     @AppStorage("speechSpeed") var speechSpeed = 1.0
     @AppStorage("speechVolume") var speechVolume = 1.0
@@ -30,11 +32,11 @@ class DashboardViewModel: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
     
-    init(backend: BackendService, system: SystemService, audio: AudioService, persistence: PersistenceService) {
+    init(backend: BackendService, system: SystemService, audio: AudioService, history: HistoryManager) {
         self.backend = backend
         self.system = system
         self.audio = audio
-        self.persistence = persistence
+        self.history = history
         
         setupBindings()
         startHeartbeat()
@@ -61,7 +63,11 @@ class DashboardViewModel: ObservableObject {
             .store(in: &cancellables)
     }
     
-    func speakSelection() async {
+    func speakSelection(text: String? = nil) async {
+        if let text = text {
+             await speak(text: text)
+             return
+        }
         guard let text = SelectionManager.getSelectedText(), !text.isEmpty else { return }
         await speak(text: text)
     }
@@ -81,7 +87,7 @@ class DashboardViewModel: ObservableObject {
             )
             
             try audio.play(data: data, volume: Float(speechVolume))
-            persistence.log(text: cleaned, voice: selectedVoice)
+            history.log(text: cleaned, voice: selectedVoice)
             
         } catch {
             print("Error: \(error)")
