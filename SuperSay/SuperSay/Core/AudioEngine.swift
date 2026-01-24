@@ -6,20 +6,25 @@ class AudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var isPlaying = false
-    
-    // We use a separate property for the progress to avoid heavy calculations in the View
     @Published var progress: Double = 0.0
     
     private var player: AVAudioPlayer?
     private var timer: AnyCancellable?
-    
-    // Flag to stop the timer from overwriting the slider while the user is dragging
     var isDragging = false
     
     func play(data: Data, volume: Float = 1.0) throws {
+        print("🎧 AudioEngine: play called with \(data.count) bytes")
         stop()
         
-        player = try AVAudioPlayer(data: data)
+        do {
+            // Explicitly hint WAV to avoid "unknown file type" error
+            player = try AVAudioPlayer(data: data, fileTypeHint: "wav")
+            print("🎧 AudioPlayer initialized successfully")
+        } catch {
+            print("❌ AudioPlayer Init Failed: \(error)")
+            throw error
+        }
+        
         player?.delegate = self
         player?.volume = volume
         player?.prepareToPlay()
@@ -28,6 +33,7 @@ class AudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate {
         self.duration = player?.duration ?? 0
         self.isPlaying = true
         
+        print("🎧 Audio Playing: \(self.duration) seconds")
         startTimer()
     }
     
@@ -37,7 +43,6 @@ class AudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate {
     
     private func startTimer() {
         timer?.cancel()
-        // Use a high-frequency timer on the .common mode so it doesn't stop during scrolling/dragging
         timer = Timer.publish(every: 0.03, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
