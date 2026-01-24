@@ -17,11 +17,18 @@ try:
     # Force phonemizer to use the bundled library
     # This is critical for the PyInstaller bundle to work without system espeak
     espeak_lib_path = espeakng_loader.get_library_path()
+    espeak_data_path = espeakng_loader.get_data_path()
+
     if espeak_lib_path:
         os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeak_lib_path
         print(f"🔧 Configured espeak library at: {espeak_lib_path}")
-    else:
-        print("⚠️ espeakng_loader found but no library path returned")
+
+    if espeak_data_path:
+        os.environ["ESPEAK_DATA_PATH"] = espeak_data_path
+        print(f"🔧 Configured espeak data at: {espeak_data_path}")
+
+    if not espeak_lib_path or not espeak_data_path:
+        print("⚠️ espeakng_loader found but missing paths")
 
 except ImportError as e:
     print(f"⚠️ Could not setup espeakng_loader: {e}")
