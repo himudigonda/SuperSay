@@ -81,7 +81,13 @@ class SuperSayStore: ObservableObject {
         }
     }
 
+    private var lastSpeakTime: Date = .distantPast
+    
     func speakSelection(text: String? = nil) async {
+        // Debounce: Prevent double triggering (e.g. key down + key up, or hotkey + button)
+        if Date().timeIntervalSince(lastSpeakTime) < 0.5 { return }
+        lastSpeakTime = Date()
+        
         speechTask?.cancel()
         
         speechTask = Task {
@@ -262,6 +268,15 @@ class SuperSayStore: ObservableObject {
     
     
     deinit {
-        stopBackend()
+        let process = serverProcess
+        Task {
+            process?.terminate()
+            
+            // Ensure background processes are killed too
+            let task = Process()
+            task.launchPath = "/usr/bin/pkill"
+            task.arguments = ["-9", "SuperSayServer"]
+            try? task.run()
+        }
     }
 }

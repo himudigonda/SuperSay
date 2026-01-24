@@ -17,13 +17,13 @@ struct SuperSayApp: App {
         // THE QUICK ACCESS MENU BAR (Native HUD)
         MenuBarExtra {
             Button("Speak Selection") { Task { await store.speakSelection() } }
-                .keyboardShortcut(".", modifiers: [.command, .shift])
+                // Global hotkey handled by KeyboardShortcuts
             
             Button("Stop Playback") { 
                 store.audio.stop()
                 store.status = .ready
             }
-            .keyboardShortcut(",", modifiers: [.command, .shift])
+                // Global hotkey handled by KeyboardShortcuts
 
             Button(store.audio.isPlaying ? "Pause" : "Resume") { store.audio.togglePause() }
                 .keyboardShortcut("/", modifiers: [.command, .shift])
