@@ -86,48 +86,28 @@ class SuperSayStore: ObservableObject {
         
         speechTask = Task {
             let input = text ?? SelectionManager.getSelectedText()
-            guard let raw = input, !raw.isEmpty else {
-                print("⚠️ No text selected")
-                return
-            }
-            
-            if showNotifications { sendNotification(text: String(raw.prefix(100)) + "...") }
-            
-            let lang = detectLanguage(for: raw)
-            let cleaned = TextProcessor.sanitize(raw, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: fixLigatures, expandAbbr: true))
+            guard let raw = input, !raw.isEmpty else { return }
             
             status = .thinking
             
-            if !self.isOnline {
-                for i in 1...10 {
-                    if self.isOnline { break }
-                    print("... waiting for server \(i)")
-                    try? await Task.sleep(nanoseconds: 1_000_000_000)
-                }
-                if !self.isOnline {
-                    status = .error("Server not ready.")
-                    return
-                }
-            }
-            
+            // 1. DUCK IMMEDIATELY
+            if enableDucking { setDucking(active: true) }
+            // Give macOS half a second to actually lower the volume
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
             do {
-                let audioData = try await fetchFullAudio(text: cleaned, lang: lang)
+                let audioData = try await fetchFullAudio(text: raw, lang: "en-us")
                 
-                // WAV Header check
-                if audioData.count >= 4 {
-                    let header = audioData.prefix(4).map { String(format: "%02hhx", $0) }.joined()
-                    if header != "52494646" {
-                        status = .error("Invalid server response.")
-                        return
-                    }
-                }
+                if Task.isCancelled { return }
                 
                 try audio.play(data: audioData, volume: Float(min(speechVolume, 1.0)))
-                history.log(text: cleaned, voice: selectedVoice)
+                history.log(text: raw, voice: selectedVoice)
+                // status is updated via the audio listener
                 
             } catch {
-                print("❌ Error in speakSelection: \(error)")
-                status = .error("Error: \(error.localizedDescription)")
+                print("❌ Error: \(error)")
+                status = .error("Error")
+                if enableDucking { setDucking(active: false) }
             }
         }
     }
@@ -143,6 +123,7 @@ class SuperSayStore: ObservableObject {
             "text": text,
             "voice": selectedVoice,
             "speed": speechSpeed,
+            "volume": speechVolume,
             "lang": lang
         ])
         
@@ -204,25 +185,24 @@ class SuperSayStore: ObservableObject {
     
     private func setDucking(active: Bool) {
         let targetVol = active ? 10 : 85
-        let scriptSource = """
+        // Use a multi-line string for the AppleScript
+        let script = """
         try
-            tell application id "com.apple.Music"
-                if it is running then set sound volume to \(targetVol)
-            end tell
+            tell application "Music" to set sound volume to \(targetVol)
         end try
         try
-            tell application id "com.spotify.client"
-                if it is running then set sound volume to \(targetVol)
-            end tell
+            tell application "Spotify" to set sound volume to \(targetVol)
         end try
         """
         
-        DispatchQueue.global(qos: .userInteractive).async {
-            var errorDict: NSDictionary?
-            if let script = NSAppleScript(source: scriptSource) {
-                script.executeAndReturnError(&errorDict)
-                if let error = errorDict { print("⚠️ Ducking Error: \(error)") }
-            }
+        // Execute via /usr/bin/osascript (much more reliable than NSAppleScript)
+        let task = Process()
+        task.launchPath = "/usr/bin/osascript"
+        task.arguments = ["-e", script]
+        
+        // Run it in the background so it doesn't freeze the UI
+        DispatchQueue.global(qos: .userInitiated).async {
+            try? task.run()
         }
     }
     

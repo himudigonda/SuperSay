@@ -14,19 +14,16 @@ uv pip install pyinstaller
 # 2. Get Espeak
 ESPEAK_PATH=$(uv run python -c "import os, espeakng_loader; print(os.path.dirname(espeakng_loader.__file__))")
 
-# 3. COMPILE (Bundling everything)
+# 3. COMPILE (Bundling everything with sledgehammer)
 uv run pyinstaller --clean --noconsole --onefile --noconfirm --name "SuperSayServer" \
     --add-data "kokoro-v1.0.onnx:." \
     --add-data "voices-v1.0.bin:." \
     --add-data "$ESPEAK_PATH:espeakng_loader" \
-    --collect-all "language_tags" \
-    --collect-all "segments" \
-    --collect-all "csvw" \
-    --collect-all "phonemizer" \
     --collect-all "kokoro_onnx" \
+    --collect-all "phonemizer" \
+    --collect-all "language_tags" \
     --hidden-import "uvicorn.loops.asyncio" \
     --hidden-import "uvicorn.protocols.http.h11_impl" \
-    --hidden-import "anyio._backends.asyncio" \
     main.py
 
 echo "✅ Compiled to backend/dist/SuperSayServer"
