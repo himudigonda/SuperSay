@@ -107,6 +107,20 @@ class SuperSayStore: ObservableObject {
             
             status = .thinking
             
+            // Wait for server to be ready before proceeding
+            if !self.isOnline {
+                print("⏳ Waiting for server to be ready...")
+                for _ in 1...10 {
+                    if self.isOnline { break }
+                    try? await Task.sleep(nanoseconds: 1_000_000_000)
+                }
+                if !self.isOnline {
+                    print("❌ Server not available")
+                    self.status = .error("Server not ready. Please wait a moment and try again.")
+                    return
+                }
+            }
+            
             do {
                 // Send FULL text to Python - it handles all chunking now!
                 // No more TaskGroup or WAV byte patching!
@@ -208,10 +222,33 @@ class SuperSayStore: ObservableObject {
         do {
             try process.run()
             serverProcess = process
-            print("🚀 [Launch] SuperSayServer started successfully.")
+            print("🚀 [Launch] SuperSayServer process started, waiting for server to be ready...")
+            
+            // Wait for server to be ready (model loading takes a few seconds)
+            Task {
+                await waitForServerReady()
+            }
         } catch {
             print("❌ Failed to launch backend: \(error)")
         }
+    }
+    
+    private func waitForServerReady() async {
+        let maxAttempts = 30  // Try for up to 30 seconds
+        for attempt in 1...maxAttempts {
+            do {
+                let (_, response) = try await URLSession.shared.data(from: URL(string: "http://127.0.0.1:8000/health")!)
+                if (response as? HTTPURLResponse)?.statusCode == 200 {
+                    print("✅ [Ready] SuperSayServer is online after \(attempt) seconds")
+                    self.isOnline = true
+                    return
+                }
+            } catch {
+                // Server not ready yet, keep waiting
+            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+        }
+        print("⚠️ Server did not become ready within \(maxAttempts) seconds")
     }
 
     func stopBackend() {
