@@ -90,19 +90,25 @@ class SuperSayStore: ObservableObject {
             
             status = .thinking
             
-            // 1. DUCK IMMEDIATELY
-            if enableDucking { setDucking(active: true) }
-            // Give macOS half a second to actually lower the volume
-            try? await Task.sleep(nanoseconds: 500_000_000)
-
             do {
+                // 1. Fetch audio first (music stays at full volume)
                 let audioData = try await fetchFullAudio(text: raw, lang: "en-us")
                 
                 if Task.isCancelled { return }
                 
+                // 2. Audio is ready. Now duck the music.
+                if enableDucking { setDucking(active: true) }
+                
+                // 3. Wait exactly 1 second as requested before speaking
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                
+                if Task.isCancelled {
+                    if enableDucking { setDucking(active: false) }
+                    return
+                }
+                
                 try audio.play(data: audioData, volume: Float(min(speechVolume, 1.0)))
                 history.log(text: raw, voice: selectedVoice)
-                // status is updated via the audio listener
                 
             } catch {
                 print("❌ Error: \(error)")

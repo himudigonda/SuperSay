@@ -57,10 +57,15 @@ async def speak(req: Req):
             sentences = [raw_text]
 
         combined_audio = []
-        for s in sentences:
+        # 12,000 samples = 0.5s at 24,000Hz
+        silence = np.zeros(12000, dtype=np.float32)
+
+        for i, s in enumerate(sentences):
             # Kokoro has a limit of ~500 tokens. Chunking protects us.
             audio, _ = kokoro.create(s, voice=req.voice, speed=req.speed, lang="en-us")
             if audio is not None:
+                if i > 0:
+                    combined_audio.append(silence)
                 combined_audio.append(audio)
 
         if not combined_audio:
