@@ -2,8 +2,7 @@
 
 > **Turn any text on your Mac into cinematic, ultra-realistic AI speech.**
 
-![SuperSay Banner](assets/banner.png) 
-<!-- *Note: Add a banner image to an assets/ folder later* -->
+![SuperSay Banner](assets/SuperSay.png)
 
 ![macOS](https://img.shields.io/badge/macOS-14.0+-000000?style=for-the-badge&logo=apple&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
@@ -16,11 +15,11 @@
 
 ## ✨ Why SuperSay?
 
-*   **🔒 Local & Private**: 100% offline inference. No data is ever sent to the cloud.
-*   **🎬 Cinematic Audio Engine**: Automatically "ducks" (lowers) Spotify or Apple Music volume smoothly while speaking, then fades it back in.
-*   **🧠 Parallel Processing**: Splits long articles into chunks and generates audio in parallel for instant playback.
-*   **🔌 Binary Patching**: Manually reconstructs WAV headers to stitch audio chunks into a single seamless track.
-*   **📦 The Vault**: A searchable history of everything you've listened to.
+* **🔒 Local & Private**: 100% offline inference. No data is ever sent to the cloud.
+* **🎬 Cinematic Audio Engine**: Automatically "ducks" (lowers) Spotify or Apple Music volume smoothly while speaking, then fades it back in.
+* **🧠 Parallel Processing**: Splits long articles into chunks and generates audio in parallel for instant playback.
+* **🔌 Binary Patching**: Manually reconstructs WAV headers to stitch audio chunks into a single seamless track.
+* **📦 The Vault**: A searchable history of everything you've listened to.
 
 ## 🏗️ Architecture
 
@@ -42,34 +41,40 @@ graph LR
 ## 🚀 Quick Start
 
 ### Prerequisites
-*   macOS 14.0 (Sonoma) or later
-*   Xcode 15+
-*   Python 3.11+ (We recommend [uv](https://github.com/astral-sh/uv))
+
+* macOS 14.0 (Sonoma) or later
+* Xcode 15+
+* Python 3.11+ (We recommend [uv](https://github.com/astral-sh/uv))
 
 ### Installation
 
-1.  **Clone the Repo**
-    ```bash
-    git clone https://github.com/yourusername/SuperSay.git
-    cd SuperSay
-    ```
+1. **Clone the Repo**
 
-2.  **Setup the Backend**
-    ```bash
-    cd backend
-    uv sync
-    # Download models (See backend/README.md)
-    ```
+```bash
+git clone https://github.com/yourusername/SuperSay.git
+cd SuperSay
+```
 
-3.  **Run the App**
-    *   Open `frontend/SuperSay/SuperSay.xcodeproj` in Xcode.
-    *   Build & Run (Cmd+R).
+2. **Setup the Backend**
+
+```bash
+cd backend
+uv sync
+# Download models (See backend/README.md)
+```
+
+3. **Run the App**
+
+* Open `frontend/SuperSay/SuperSay.xcodeproj` in Xcode.
+* Build & Run (Cmd+R).
 
 ## 📚 Documentation
 
 *   [**Architecture Deep Dive**](docs/ARCHITECTURE.md): How the Swift-Python bridge works.
-*   [**Backend Documentation**](backend/README.md): API endpoints and Model details.
-*   [**Frontend Documentation**](frontend/README.md): SwiftUI views and Core logic.
+*   [**Feature Roadmap**](docs/ROADMAP.md): What's coming next.
+*   [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and best practices.
+*   [**Backend Details**](backend/README.md): API and Model technicals.
+*   [**Frontend Details**](frontend/README.md): SwiftUI architecture.
 *   [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
 
 ## 🤝 Contributing

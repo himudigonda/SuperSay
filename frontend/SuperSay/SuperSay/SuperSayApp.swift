@@ -1,5 +1,6 @@
 import SwiftUI
 import KeyboardShortcuts
+import UserNotifications
 
 @main
 struct SuperSayApp: App {
@@ -42,23 +43,48 @@ struct SuperSayApp: App {
         self.backend = backendInstance
         
         systemInstance.requestPermissions()
+        requestNotificationPermission()
         setupShortcuts(vm: vmInstance, audio: audioInstance)
+        
+        TelemetryService.shared.trackLaunch()
+    }
+    
+    private func requestNotificationPermission() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
     }
     
     private func setupShortcuts(vm: DashboardViewModel, audio: AudioService) {
+        print("⌨️ KeyboardShortcuts: Initializing registration...")
+        
         KeyboardShortcuts.onKeyUp(for: .playText) {
+            print("⌨️ KeyboardShortcuts: playText triggered")
             Task { @MainActor in
                 await vm.speakSelection()
             }
         }
         
         KeyboardShortcuts.onKeyUp(for: .togglePause) {
-            audio.togglePause()
+            print("⌨️ KeyboardShortcuts: togglePause triggered")
+            Task { @MainActor in
+                audio.togglePause()
+            }
         }
         
         KeyboardShortcuts.onKeyUp(for: .stopText) {
-            audio.stop()
+            print("⌨️ KeyboardShortcuts: stopText triggered")
+            Task { @MainActor in
+                audio.stop()
+            }
         }
+        
+        KeyboardShortcuts.onKeyUp(for: .exportToDesktop) {
+            print("⌨️ KeyboardShortcuts: exportToDesktop triggered")
+            Task { @MainActor in
+                audio.exportToDesktop()
+            }
+        }
+        
+        print("⌨️ KeyboardShortcuts: All shortcuts registered.")
     }
     
     var body: some Scene {

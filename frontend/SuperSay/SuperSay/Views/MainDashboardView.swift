@@ -47,13 +47,35 @@ struct MainDashboardView: View {
                 }
             }
             Spacer()
-            Text(vm.status.message.uppercased())
-                .font(.system(size: 10, weight: .bold))
-                .kerning(2)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .foregroundStyle(.primary)
-                .background(Capsule().stroke(lineWidth: 1).foregroundStyle(.primary.opacity(0.1)))
+            
+            HStack(spacing: 12) {
+                Text(vm.status.message.uppercased())
+                    .font(.system(size: 10, weight: .bold))
+                    .kerning(2)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .foregroundStyle(.primary)
+                    .background(Capsule().stroke(lineWidth: 1).foregroundStyle(.primary.opacity(0.1)))
+                
+                if audio.duration > 0 {
+                    Button {
+                        audio.exportToDesktop()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.arrow.down.fill")
+                            Text("SAVE")
+                                .font(.system(size: 10, weight: .black))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.cyan)
+                        .foregroundStyle(.black)
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Export Last Clip to Desktop (Cmd+Shift+M)")
+                }
+            }
         }
         .padding(40)
     }
@@ -91,7 +113,7 @@ struct MainDashboardView: View {
     
     private var footerSection: some View {
         VStack(spacing: 30) {
-            if vm.status == .speaking || vm.status == .paused || audio.isPlaying {
+            if vm.status == .speaking || vm.status == .paused || audio.duration > 0 {
                 // Slider Logic (same as before but using 'audio' environment object)
                 Slider(value: $localProgress, in: 0...1, onEditingChanged: { editing in
                     isEditingSlider = editing

@@ -85,9 +85,18 @@ actor BackendService {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
+        print("📡 BackendService: POST /speak (\(text.count) chars)")
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("❌ BackendService: Invalid response type")
+            throw URLError(.badServerResponse)
+        }
+        
+        print("📡 BackendService: Received status \(httpResponse.statusCode), \(data.count) bytes")
+        
+        guard httpResponse.statusCode == 200 else {
+            print("❌ BackendService: Server error \(httpResponse.statusCode)")
             throw URLError(.badServerResponse)
         }
         

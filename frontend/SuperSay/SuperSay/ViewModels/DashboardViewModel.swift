@@ -20,6 +20,7 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("enableDucking") var enableDucking = true
     @AppStorage("cleanURLs") var cleanURLs = true
     @AppStorage("appTheme") var appTheme = "system" // system, light, dark
+    @AppStorage("telemetryEnabled") var telemetryEnabled = true
     
     // Computed property for display
     var currentVoiceDisplay: String {
@@ -100,8 +101,10 @@ class DashboardViewModel: ObservableObject {
                 volume: speechVolume
             )
             
+            print("🎬 DashboardViewModel: Audio data received, sending to AudioService")
             try audio.play(data: data, volume: Float(speechVolume))
             history.log(text: cleaned, voice: selectedVoice)
+            TelemetryService.shared.trackGeneration(charCount: cleaned.count)
             
         } catch {
             print("Error: \(error)")

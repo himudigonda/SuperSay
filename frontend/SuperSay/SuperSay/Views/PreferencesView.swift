@@ -1,7 +1,9 @@
 import SwiftUI
+import KeyboardShortcuts
 
 struct PreferencesView: View {
     @EnvironmentObject var vm: DashboardViewModel
+    @EnvironmentObject var audio: AudioService
     @EnvironmentObject var launchManager: LaunchManager
     
     var body: some View {
@@ -112,8 +114,41 @@ struct PreferencesView: View {
                         
                         Divider()
                         
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Keyboard Shortcut")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            KeyboardShortcuts.Recorder("", name: .exportToDesktop)
+                        }
+                        
+                        Divider()
+                        
                         Toggle("Start at Login", isOn: $launchManager.isLaunchAtLoginEnabled)
                             .toggleStyle(.switch)
+                        
+                        Divider()
+                        
+                        Toggle(isOn: $vm.telemetryEnabled) {
+                            VStack(alignment: .leading) {
+                                Text("Anonymous Analytics")
+                                Text("Help improve SuperSay by sharing anonymous usage statistics.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Button {
+                            audio.exportToDesktop()
+                        } label: {
+                            Label("Export Last Clip to Desktop", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.cyan)
+                        .help("Manually export the most recently generated audio clip.")
                     }
                 }
             }
