@@ -70,7 +70,7 @@ if command -v create-dmg &> /dev/null; then
     # UPDATE: Icon path moved
     create-dmg \
         --volname "${APP_NAME}" \
-        --volicon "${XCODE_PROJECT_DIR}/SuperSay/Assets.xcassets/AppIcon.appiconset/icon_256x256.png" \
+        --volicon "${XCODE_PROJECT_DIR}/SuperSay/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" \
         --window-pos 200 120 \
         --window-size 660 400 \
         --icon-size 100 \

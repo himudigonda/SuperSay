@@ -14,7 +14,7 @@
     <key>CFBundleIconName</key>
     <string>AppIcon</string>
     <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
+    <string>AppIcon.icns</string>
 
     <!-- Accessibility usage description -->
     <key>NSAppleEventsUsageDescription</key>
