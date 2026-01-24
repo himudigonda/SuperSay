@@ -52,34 +52,60 @@ SuperSay is a professional, set-and-forget utility that transforms any text on y
 
 ## 🚀 Getting Started
 
-### 1. Backend Setup (Local Server)
+### Option 1: Download (Recommended for Users)
 
-SuperSay requires a local AI engine running on port 8000.
+1. Go to [**Releases**](https://github.com/himudigonda/SuperSay/releases)
+2. Download the latest `SuperSay-x.x.x.dmg`
+3. Open the DMG and drag **SuperSay** to your Applications folder
+4. Launch SuperSay from Applications
+5. **First Run:** macOS will ask for Accessibility permissions (System Preferences → Privacy & Security → Accessibility)
+
+> **Note:** If macOS blocks the app, right-click and select "Open" to bypass Gatekeeper.
+
+---
+
+### Option 2: Build from Source (For Developers)
+
+#### Prerequisites
+- macOS 14.0+ (Sonoma or later)
+- Xcode 15+
+- Python 3.11+ with [uv](https://github.com/astral-sh/uv) package manager
+
+#### 1. Clone the Repository
 
 ```bash
-cd backend
-# Install dependencies and start the server
-uv run main.py
+git clone https://github.com/himudigonda/SuperSay.git
+cd SuperSay
 ```
 
-*Note: Ensure `kokoro-v1.0.onnx` and `voices-v1.0.bin` are in the backend folder.*
+#### 2. Download AI Models
 
-### 2. Frontend Setup (Xcode)
+Download these files and place them in the `backend/` folder:
+- [`kokoro-v1.0.onnx`](https://huggingface.co/hexgrad/Kokoro-82M-v1.0-ONNX/resolve/main/kokoro-v1.0.onnx) (~325MB)
+- [`voices-v1.0.bin`](https://huggingface.co/hexgrad/Kokoro-82M-v1.0-ONNX/resolve/main/voices-v1.0.bin) (~28MB)
 
-1. Open `SuperSay.xcodeproj`.
-2. Ensure you have the `KeyboardShortcuts` package added as a dependency.
-3. Build and Run (**Cmd+R**).
-
-### 3. Distribution (Public Release)
-
-To package the app for others, use the provided compilation script:
+#### 3. Compile the Backend
 
 ```bash
 chmod +x scripts/compile_backend.sh
 ./scripts/compile_backend.sh
 ```
 
-Then drag the resulting binary into the Xcode **Resources** folder. The app will now auto-launch the backend on start.
+This creates a standalone `SuperSayServer` binary that gets bundled into the app.
+
+#### 4. Build in Xcode
+
+1. Open `SuperSay/SuperSay.xcodeproj`
+2. Select your signing team (or use "Sign to Run Locally")
+3. Build and Run (**⌘R**)
+
+#### 5. Create a DMG for Distribution
+
+```bash
+./scripts/create_dmg.sh 1.0.0
+```
+
+The DMG will be created in the `build/` folder.
 
 ---
 
