@@ -2,7 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!-- Make app a background agent (no dock icon, no bouncing) -->
+    <!-- Make app a standard foreground app (shows in Dock) -->
     <key>LSUIElement</key>
     <false/>
     
@@ -10,6 +10,12 @@
     <key>LSBackgroundOnly</key>
     <false/>
     
+    <!-- App Icon Configuration -->
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+
     <!-- Accessibility usage description -->
     <key>NSAppleEventsUsageDescription</key>
     <string>SuperSay needs to control other apps to adjust music volume while speaking.</string>

@@ -259,4 +259,9 @@ class SuperSayStore: ObservableObject {
         }
         KeyboardShortcuts.onKeyUp(for: .exportToDesktop) { [weak self] in Task { await self?.exportToDesktop() } }
     }
+    
+    
+    deinit {
+        stopBackend()
+    }
 }
