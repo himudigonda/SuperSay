@@ -60,3 +60,6 @@ history.json
 .agent/
 .gemini/
 SuperSay/SuperSay/SuperSayServer
+frontend/SuperSay/SuperSay/SuperSayServer
+backend/dist/
+backend/build/

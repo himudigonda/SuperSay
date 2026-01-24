@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.128.0",
     "kokoro-onnx>=0.4.9",
     "numpy>=2.4.1",
+    "pydantic-settings>=2.12.0",
     "soundfile>=0.13.1",
     "uvicorn>=0.40.0",
 ]

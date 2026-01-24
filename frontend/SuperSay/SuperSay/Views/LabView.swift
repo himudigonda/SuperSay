@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct LabView: View {
-    @EnvironmentObject var store: SuperSayStore
+    @EnvironmentObject var settings: SettingsViewModel
+    @EnvironmentObject var launcher: LaunchService
     
     var body: some View {
         ScrollView {
@@ -11,12 +12,10 @@ struct LabView: View {
                 // AUDIO SETTINGS
                 GroupBox(label: Label("Audio Environment", systemImage: "speaker.wave.3")) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Duck Music Volume", isOn: $store.enableDucking)
+                        Toggle("Duck Music Volume", isOn: $settings.enableDucking)
                         Text("Lowers Music/Spotify volume while speaking.").font(.caption).foregroundStyle(.secondary)
                         
-                        Divider().padding(.vertical, 5)
-                        
-                        Toggle("Show Notifications", isOn: $store.showNotifications)
+                        // Toggle("Show Notifications", isOn: $settings.showNotifications)
                     }
                     .padding(8)
                 }
@@ -24,8 +23,8 @@ struct LabView: View {
                 // TEXT PROCESSING
                 GroupBox(label: Label("Text Intelligence", systemImage: "brain")) {
                     VStack(alignment: .leading, spacing: 12) {
-                        Toggle("Clean URLs", isOn: $store.cleanURLs)
-                        Toggle("Fix PDF Formatting", isOn: $store.fixLigatures)
+                        Toggle("Clean URLs", isOn: $settings.cleanURLs)
+                        // Toggle("Fix PDF Formatting", isOn: $settings.fixLigatures)
                         
                         Divider().padding(.vertical, 5)
                         
@@ -46,7 +45,7 @@ struct LabView: View {
                 // VOICE CALIBRATION
                 GroupBox(label: Label("Voice & Speed", systemImage: "tuningfork")) {
                     VStack(alignment: .leading, spacing: 15) {
-                        Picker("Voice", selection: $store.selectedVoice) {
+                        Picker("Voice", selection: $settings.selectedVoice) {
                             Section("American") {
                                 Text("🇺🇸 Bella").tag("af_bella")
                                 Text("🇺🇸 Sarah").tag("af_sarah")
@@ -62,14 +61,14 @@ struct LabView: View {
                         }
                         
                         VStack(alignment: .leading) {
-                            Text("Speed: \(String(format: "%.1f", store.speechSpeed))x")
-                            Slider(value: $store.speechSpeed, in: 0.5...2.0, step: 0.1)
+                            Text("Speed: \(String(format: "%.1f", settings.speechSpeed))x")
+                            Slider(value: $settings.speechSpeed, in: 0.5...2.0, step: 0.1)
                         }
                         
                         VStack(alignment: .leading) {
-                            Text("Volume: \(Int(store.speechVolume * 100))%")
-                            Slider(value: $store.speechVolume, in: 0.0...1.5, step: 0.1)
-                            if store.speechVolume > 1.0 {
+                            Text("Volume: \(Int(settings.speechVolume * 100))%")
+                            Slider(value: $settings.speechVolume, in: 0.0...1.5, step: 0.1)
+                            if settings.speechVolume > 1.0 {
                                 Text("⚠️ Digital boost may cause distortion")
                                     .font(.caption)
                                     .foregroundStyle(.orange)
@@ -82,9 +81,9 @@ struct LabView: View {
                 // SYSTEM
                 GroupBox(label: Label("System", systemImage: "macpro.gen3")) {
                     VStack(alignment: .leading, spacing: 10) {
-                        Toggle("Start at Login", isOn: $store.launchManager.isLaunchAtLoginEnabled)
+                        Toggle("Start at Login", isOn: $launcher.isLaunchAtLoginEnabled)
                         
-                        Picker("Theme", selection: $store.appTheme) {
+                        Picker("Theme", selection: $settings.appTheme) {
                             Text("System").tag("system")
                             Text("Light").tag("light")
                             Text("Dark").tag("dark")
@@ -93,7 +92,7 @@ struct LabView: View {
                         Divider().padding(.vertical, 5)
                         
                         Button(role: .destructive) {
-                            store.resetSystemPermissions()
+                            settings.resetSystemPermissions()
                         } label: {
                             Label("Reset Permissions", systemImage: "arrow.counterclockwise")
                         }

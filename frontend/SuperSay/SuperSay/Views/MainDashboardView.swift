@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct MainDashboardView: View {
-    @EnvironmentObject var store: SuperSayStore
+    @EnvironmentObject var vm: DashboardViewModel
     @Environment(\.colorScheme) var colorScheme
     
     // Local state for the slider to make it feel instant during drag
@@ -12,10 +12,10 @@ struct MainDashboardView: View {
         ZStack {
             // THE GLOWING AMBIENCE (CENTRAL)
             Circle()
-                .fill(store.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(colorScheme == .dark ? 0.12 : 0.08)) : AnyShapeStyle(Color.clear))
+                .fill(vm.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(colorScheme == .dark ? 0.12 : 0.08)) : AnyShapeStyle(Color.clear))
                 .frame(width: 450, height: 450)
                 .blur(radius: 90)
-                .animation(.easeInOut(duration: 1.2), value: store.status)
+                .animation(.easeInOut(duration: 1.2), value: vm.status)
             
             VStack(spacing: 0) {
                 headerSection
@@ -28,29 +28,29 @@ struct MainDashboardView: View {
                 
                 // FOOTER: CONTROLS & SMOOTH SEEKER
                 VStack(spacing: 30) {
-                    if store.status == .speaking || store.status == .paused || store.status == .thinking || store.audio.isPlaying {
+                    if vm.status == .speaking || vm.status == .paused || vm.status == .thinking || vm.audio.isPlaying {
                         VStack(spacing: 8) {
                             // --- THE SMOOTH SEEKER ---
                             Slider(value: $localProgress, in: 0...1, onEditingChanged: { editing in
                                 isEditingSlider = editing
-                                store.audio.isDragging = editing
+                                vm.audio.isDragging = editing
                                 if !editing {
-                                    store.audio.seek(to: localProgress)
+                                    vm.audio.seek(to: localProgress)
                                 }
                             })
                             .tint(.cyan)
                             .controlSize(.small)
                             // This ensures the slider updates its position from the engine 
                             // ONLY when the user isn't touching it
-                            .onReceive(store.audio.$progress) { newProgress in
+                            .onReceive(vm.audio.$progress) { newProgress in
                                 if !isEditingSlider {
                                     localProgress = newProgress
                                 }
                             }
                             
                             HStack {
-                                let total = store.audio.duration
-                                let current = isEditingSlider ? localProgress * total : store.audio.currentTime
+                                let total = vm.audio.duration
+                                let current = isEditingSlider ? localProgress * total : vm.audio.currentTime
                                 
                                 Text(formatTime(current))
                                     .font(.system(size: 10, design: .monospaced))
@@ -99,18 +99,18 @@ struct MainDashboardView: View {
                 
                 HStack(spacing: 6) {
                     Circle()
-                        .fill(store.isOnline ? Color.green : Color.red)
+                        .fill(vm.isOnline ? Color.green : Color.red)
                         .frame(width: 6, height: 6)
                     
-                    Text(store.isOnline ? "SYSTEM ONLINE" : "OFFLINE")
+                    Text(vm.isOnline ? "SYSTEM ONLINE" : "OFFLINE")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
-                        .foregroundStyle(store.isOnline ? .green : .red)
+                        .foregroundStyle(vm.isOnline ? .green : .red)
                 }
             }
             
             Spacer()
             
-            Text(store.status.message.uppercased())
+            Text(vm.status.message.uppercased())
                 .font(.system(size: 10, weight: .bold))
                 .kerning(2)
                 .padding(.horizontal, 10)
@@ -133,43 +133,43 @@ struct MainDashboardView: View {
                 // The Dynamic Pulse
                 Circle()
                     .stroke(lineWidth: 1.5)
-                    .foregroundStyle(store.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(0.6)) : AnyShapeStyle(Color.primary.opacity(0.05)))
+                    .foregroundStyle(vm.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(0.6)) : AnyShapeStyle(Color.primary.opacity(0.05)))
                     .frame(width: 240, height: 240)
-                    .scaleEffect(store.status == .speaking ? 1.08 : 1.0)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: store.status == .speaking)
+                    .scaleEffect(vm.status == .speaking ? 1.08 : 1.0)
+                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: vm.status == .speaking)
                 
                 // THE WAVEFORM ICON
                 Image(systemName: "waveform")
                     .font(.system(size: 100, weight: .ultraLight))
                     .foregroundStyle(
                         LinearGradient(
-                            colors: store.status == .speaking ? [.cyan, .purple] : [.gray, .primary.opacity(0.1)],
+                            colors: vm.status == .speaking ? [.cyan, .purple] : [.gray, .primary.opacity(0.1)],
                             startPoint: .top,
                             endPoint: .bottom
                         )
                     )
-                    .symbolEffect(.bounce, value: store.status == .speaking)
-                    .shadow(color: store.status == .speaking ? .cyan.opacity(0.4) : .clear, radius: 30)
+                    .symbolEffect(.bounce, value: vm.status == .speaking)
+                    .shadow(color: vm.status == .speaking ? .cyan.opacity(0.4) : .clear, radius: 30)
             }
             
             VStack(spacing: 12) {
-                Text(store.currentVoiceDisplay)
+                Text(vm.currentVoiceDisplay)
                     .font(.system(size: 14, weight: .bold, design: .monospaced))
                     .foregroundStyle(.secondary)
                     .kerning(2)
                 
-                let total = store.audio.duration
-                let current = isEditingSlider ? localProgress * total : store.audio.currentTime
+                let total = vm.audio.duration
+                let current = isEditingSlider ? localProgress * total : vm.audio.currentTime
                 
-                if store.status == .speaking || store.status == .paused || store.status == .thinking || store.audio.isPlaying {
+                if vm.status == .speaking || vm.status == .paused || vm.status == .thinking || vm.audio.isPlaying {
                     Text(formatTime(current))
                         .font(.system(size: 32, weight: .thin, design: .monospaced))
                         .contentTransition(.numericText())
                         .foregroundStyle(.primary)
                 } else {
                     Text("0:00")
-                        .font(.system(size: 32, weight: .thin, design: .monospaced))
-                        .foregroundStyle(.secondary.opacity(0.5))
+                    .font(.system(size: 32, weight: .thin, design: .monospaced))
+                    .foregroundStyle(.secondary.opacity(0.5))
                 }
             }
         }
@@ -178,11 +178,11 @@ struct MainDashboardView: View {
     private var transportControls: some View {
         HStack(spacing: 60) {
             TransportButton(icon: "backward.fill", size: 20) { 
-                store.audio.seek(to: max(0, store.audio.progress - 0.1)) 
+                vm.audio.seek(to: max(0, vm.audio.progress - 0.1)) 
             }
             
             Button {
-                store.audio.togglePause()
+                vm.audio.togglePause()
             } label: {
                 ZStack {
                     Circle()
@@ -190,7 +190,7 @@ struct MainDashboardView: View {
                         .frame(width: 72, height: 72)
                         .shadow(color: .cyan.opacity(0.4), radius: 20)
                     
-                    Image(systemName: store.audio.isPlaying ? "pause.fill" : "play.fill")
+                    Image(systemName: vm.audio.isPlaying ? "pause.fill" : "play.fill")
                         .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(colorScheme == .dark ? .black : .white)
                 }
@@ -198,7 +198,7 @@ struct MainDashboardView: View {
             .buttonStyle(.plain)
             
             TransportButton(icon: "forward.fill", size: 20) { 
-                store.audio.seek(to: min(1, store.audio.progress + 0.1)) 
+                vm.audio.seek(to: min(1, vm.audio.progress + 0.1)) 
             }
         }
     }

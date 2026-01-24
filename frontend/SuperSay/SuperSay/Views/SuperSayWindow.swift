@@ -1,8 +1,12 @@
 import SwiftUI
 
 struct SuperSayWindow: View {
-    @EnvironmentObject var store: SuperSayStore
+    @EnvironmentObject var dashboardVM: DashboardViewModel
+    @EnvironmentObject var audio: AudioService
+    @EnvironmentObject var settings: SettingsViewModel
+    @EnvironmentObject var persistence: PersistenceService
     @Environment(\.colorScheme) var colorScheme
+    @State private var selectedTab: String? = "home"
     
     var body: some View {
         NavigationSplitView {
@@ -26,7 +30,7 @@ struct SuperSayWindow: View {
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
                 
-                List(selection: $store.selectedTab) {
+                List(selection: $selectedTab) {
                     Section("Library") {
                         NavigationLink(value: "home") { Label("Now Playing", systemImage: "play.circle.fill") }
                         NavigationLink(value: "library") { Label("Audiobooks", systemImage: "book.closed.fill") }
@@ -82,7 +86,7 @@ struct SuperSayWindow: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // FLOATING MINI PLAYER (Global) - Hide when on main dashboard to avoid duplicate bars
-                if (store.status == .speaking || store.status == .paused) && store.selectedTab != "home" {
+                if (dashboardVM.status == .speaking || dashboardVM.status == .paused) && selectedTab != "home" {
                     miniPlayerHUD
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -90,12 +94,12 @@ struct SuperSayWindow: View {
             .background(adaptiveBackdrop)
         }
         .frame(minWidth: 1000, minHeight: 750)
-        .preferredColorScheme(store.appTheme == "system" ? nil : (store.appTheme == "dark" ? .dark : .light))
+        .preferredColorScheme(settings.appTheme == "system" ? nil : (settings.appTheme == "dark" ? .dark : .light))
     }
     
     @ViewBuilder
     private var detailContent: some View {
-        switch store.selectedTab {
+        switch selectedTab {
         case "home": MainDashboardView()
         case "library": LibraryView()
         case "history": VaultView()
@@ -107,24 +111,24 @@ struct SuperSayWindow: View {
     private var miniPlayerHUD: some View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.status == .speaking ? "SPEAKING" : "PAUSED")
+                Text(dashboardVM.status == .speaking ? "SPEAKING" : "PAUSED")
                     .font(.system(size: 8, weight: .black))
                     .foregroundStyle(.cyan)
-                Text(store.history.entries.first?.text ?? "Reading...")
+                Text(persistence.history.first?.text ?? "Reading...")
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
             }
             .frame(width: 250, alignment: .leading)
             
-            ProgressView(value: store.audio.progress)
+            ProgressView(value: audio.progress)
                 .tint(.cyan)
                 .scaleEffect(x: 1, y: 0.5)
             
             HStack(spacing: 12) {
-                Button { store.audio.togglePause() } label: {
-                    Image(systemName: store.audio.isPlaying ? "pause.fill" : "play.fill")
+                Button { audio.togglePause() } label: {
+                    Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
                 }
-                Button { store.audio.stop() } label: {
+                Button { audio.stop() } label: {
                     Image(systemName: "stop.fill")
                 }
             }
@@ -137,12 +141,12 @@ struct SuperSayWindow: View {
         .clipShape(RoundedRectangle(cornerRadius: 15))
         .padding(20)
         .shadow(color: .black.opacity(0.1), radius: 10)
-        .animation(.spring(), value: store.audio.progress)
+        .animation(.spring(), value: audio.progress)
     }
 
     private var adaptiveBackdrop: some View {
         Group {
-            if store.appTheme == "dark" || (store.appTheme == "system" && colorScheme == .dark) {
+            if settings.appTheme == "dark" || (settings.appTheme == "system" && colorScheme == .dark) {
                 LinearGradient(colors: [Color.black, Color(white: 0.12)], startPoint: .top, endPoint: .bottom)
             } else {
                 LinearGradient(colors: [Color(white: 0.98), Color(white: 0.92)], startPoint: .top, endPoint: .bottom)
