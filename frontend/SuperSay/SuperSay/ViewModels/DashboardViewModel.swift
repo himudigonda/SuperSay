@@ -53,16 +53,15 @@ class DashboardViewModel: ObservableObject {
                     self.status = .speaking
                     if self.enableDucking { self.system.setMusicVolume(ducked: true) }
                 } else {
-                    // If audio stops, we check if it was ended or just paused
-                    // Note: AudioService updates isPlaying to false on pause and on stop.
-                    // If the player still has a current time > 0 and isn't finished, it's a pause.
-                    // But for simplicity, we can just check our local status.
+                    // FIX: Differentiate between paused and stopped
                     if self.status == .speaking {
-                        self.status = .paused
-                    } else if self.status == .thinking {
-                        // Keep thinking until audio starts
-                    } else {
-                        self.status = .ready
+                        // If audio stopped playing but we were speaking, it's a PAUSE or STOP
+                        // We check the audio player's current time vs duration to guess
+                        if self.audio.currentTime > 0.1 && self.audio.currentTime < self.audio.duration - 0.1 {
+                            self.status = .paused
+                        } else {
+                            self.status = .ready
+                        }
                     }
                     
                     if self.enableDucking { 
@@ -104,7 +103,7 @@ class DashboardViewModel: ObservableObject {
             print("🎬 DashboardViewModel: Audio data received, sending to AudioService")
             try audio.play(data: data, volume: Float(speechVolume))
             history.log(text: cleaned, voice: selectedVoice)
-            TelemetryService.shared.trackGeneration(charCount: cleaned.count)
+            MetricsService.shared.trackGeneration(charCount: cleaned.count)
             
         } catch {
             print("Error: \(error)")

@@ -155,6 +155,7 @@ struct PreferencesView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
+                        .help("We collect: App Launches, Character Counts, and Export Counts. No text content or personal data is ever recorded or transmitted.")
                         
                         Divider()
                         

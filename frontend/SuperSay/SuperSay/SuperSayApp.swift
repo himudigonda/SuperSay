@@ -46,7 +46,7 @@ struct SuperSayApp: App {
         requestNotificationPermission()
         setupShortcuts(vm: vmInstance, audio: audioInstance)
         
-        TelemetryService.shared.trackLaunch()
+        MetricsService.shared.trackLaunch()
     }
     
     private func requestNotificationPermission() {

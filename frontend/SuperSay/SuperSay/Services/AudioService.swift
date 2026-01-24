@@ -112,7 +112,7 @@ class AudioService: NSObject, ObservableObject, AVAudioPlayerDelegate {
             try data.write(to: fileURL)
             print("✅ AudioService: File written successfully to Desktop")
             showNotification(title: "Export Successful", body: "Saved to Desktop: \(filename)")
-            TelemetryService.shared.trackExport()
+            MetricsService.shared.trackExport()
         } catch {
             print("❌ AudioService: Write error - \(error.localizedDescription)")
             showNotification(title: "Export Failed", body: error.localizedDescription)

@@ -5,9 +5,14 @@
 ![SuperSay Banner](assets/SuperSay.png)
 
 ![macOS](https://img.shields.io/badge/macOS-14.0+-000000?style=for-the-badge&logo=apple&logoColor=white)
+![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-Native-007AFF?style=for-the-badge&logo=apple&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-5.0-F05138?style=for-the-badge&logo=swift&logoColor=white)
+![TTS Engine](https://img.shields.io/badge/TTS_Engine-Kokoro--82M-blueviolet?style=for-the-badge)
+![Model Format](https://img.shields.io/badge/Model_Format-ONNX-00529B?style=for-the-badge&logo=onnx&logoColor=white)
+![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
+![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)
 
 **SuperSay** is a professional-grade text-to-speech utility for macOS. Unlike standard accessibility tools, SuperSay focuses on **audio fidelity** and **system integration**. It uses the state-of-the-art [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) model running locally to generate human-like speech while intelligently managing your system's audio environment (ducking music, pausing for phone calls).
 
@@ -60,7 +65,7 @@ make run
 1. **Clone the Repo**
 
 ```bash
-git clone https://github.com/yourusername/SuperSay.git
+git clone https://github.com/himudigonda/SuperSay.git
 cd SuperSay
 ```
 
@@ -108,7 +113,7 @@ SuperSay includes an optional analytics module to help us track overall product 
 
 * **Collected Data:** App Launches, Total Characters Read, Audio Export Counts. **No text content is ever collected.**
 * **Privacy:** All data is sent to a centralized endpoint (`https://himudigonda.me/api/telemetry`) keyed by a unique, anonymous ID. Users can opt-out in **Preferences**.
-* **Transparency:** The service implementation is fully open-source in `TelemetryService.swift`.
+* **Transparency:** The service implementation is fully open-source in `MetricsService.swift`.
 
 ## 🤝 Contributing
 
@@ -117,3 +122,6 @@ We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+<p align="center">Made with ❤️ for the macOS Community</p>
