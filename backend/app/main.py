@@ -9,12 +9,18 @@ from fastapi import FastAPI
 # Force asyncio backend for uvicorn compatibility
 os.environ["ANYIO_BACKEND"] = "asyncio"
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION)
+from contextlib import asynccontextmanager
 
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     TTSEngine.initialize()
+    yield
+    # Shutdown (if needed)
+
+
+app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
 
 
 app.include_router(router)

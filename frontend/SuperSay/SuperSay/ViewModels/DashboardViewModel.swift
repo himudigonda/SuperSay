@@ -52,11 +52,24 @@ class DashboardViewModel: ObservableObject {
                     self.status = .speaking
                     if self.enableDucking { self.system.setMusicVolume(ducked: true) }
                 } else {
-                    if self.status == .speaking { self.status = .ready }
+                    // If audio stops, we check if it was ended or just paused
+                    // Note: AudioService updates isPlaying to false on pause and on stop.
+                    // If the player still has a current time > 0 and isn't finished, it's a pause.
+                    // But for simplicity, we can just check our local status.
+                    if self.status == .speaking {
+                        self.status = .paused
+                    } else if self.status == .thinking {
+                        // Keep thinking until audio starts
+                    } else {
+                        self.status = .ready
+                    }
+                    
                     if self.enableDucking { 
-                        // Delay unduck slightly for smooth transition
+                        // Only unduck if we are truly done or paused for a while
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            self.system.setMusicVolume(ducked: false) 
+                            if !self.audio.isPlaying {
+                                self.system.setMusicVolume(ducked: false) 
+                            }
                         }
                     }
                 }
@@ -101,7 +114,7 @@ class DashboardViewModel: ObservableObject {
             while true {
                 isBackendOnline = await backend.checkHealth()
                 if !isBackendOnline { await backend.start() }
-                try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
             }
         }
     }

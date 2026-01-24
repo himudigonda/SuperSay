@@ -72,6 +72,15 @@ struct SuperSayWindow: View {
                                 .frame(width: 36, height: 36)
                         }
                         .help("LinkedIn")
+                        
+                        Link(destination: URL(string: "https://himudigonda.me")!) {
+                            Image(systemName: "globe") // System Icon
+                                .resizable()
+                                .aspectRatio(contentMode: .fit)
+                                .frame(width: 28, height: 28)
+                                .padding(4)
+                        }
+                        .help("Website")
                     }
                     .foregroundStyle(.cyan)
                 }

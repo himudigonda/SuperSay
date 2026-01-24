@@ -1,4 +1,5 @@
 import SwiftUI
+import KeyboardShortcuts
 
 @main
 struct SuperSayApp: App {
@@ -39,6 +40,25 @@ struct SuperSayApp: App {
         _dashboardVM = StateObject(wrappedValue: vmInstance)
         
         self.backend = backendInstance
+        
+        systemInstance.requestPermissions()
+        setupShortcuts(vm: vmInstance, audio: audioInstance)
+    }
+    
+    private func setupShortcuts(vm: DashboardViewModel, audio: AudioService) {
+        KeyboardShortcuts.onKeyUp(for: .playText) {
+            Task { @MainActor in
+                await vm.speakSelection()
+            }
+        }
+        
+        KeyboardShortcuts.onKeyUp(for: .togglePause) {
+            audio.togglePause()
+        }
+        
+        KeyboardShortcuts.onKeyUp(for: .stopText) {
+            audio.stop()
+        }
     }
     
     var body: some Scene {
