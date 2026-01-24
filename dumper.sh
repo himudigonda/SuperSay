@@ -27,6 +27,13 @@ find . -type f \
     ! -path '*/DerivedData/*' \
     ! -path '*/.build/*' \
     ! -path '*.app/*' \
+    ! -path '*/build/*' \
+    ! -path '*/dist/*' \
+    ! -path '*/.gemini/*' \
+    ! -path '*/.agent/*' \
+    ! -path '*.xcodeproj/*' \
+    ! -path '*.xcworkspace/*' \
+    ! -path '*/localpycs/*' \
     ! -name '.DS_Store' \
     ! -name '*.png' \
     ! -name '*.jpg' \
@@ -36,7 +43,19 @@ find . -type f \
     ! -name '*.icns' \
     ! -name '*.wav' \
     ! -name '*.mp3' \
+    ! -name '*.spec' \
+    ! -name '*.toc' \
+    ! -name '*.pyz' \
+    ! -name '*.pkg' \
+    ! -name '*.zip' \
+    ! -name '*.pyc' \
+    ! -name '*.html' \
+    ! -name '*.txt' \
+    ! -name '*.plist' \
     ! -name 'Package.resolved' \
+    ! -name 'SuperSayServer' \
+    ! -name 'project.pbxproj' \
+    ! -name 'contents.xcworkspacedata' \
     | sort \
     | while read -r file; do
         echo ""
