@@ -97,6 +97,34 @@ struct PreferencesView: View {
                     }
                 }
                 
+                // Section: Keyboard Shortcuts
+                PreferenceSection(title: "Shortcuts", icon: "keyboard") {
+                    VStack(spacing: 0) {
+                        ShortcutRow(title: "Speak Selection", name: .playText)
+                        Divider().padding(.vertical, 8)
+                        ShortcutRow(title: "Pause / Resume", name: .togglePause)
+                        Divider().padding(.vertical, 8)
+                        ShortcutRow(title: "Stop Playback", name: .stopText)
+                        Divider().padding(.vertical, 8)
+                        ShortcutRow(title: "Export to Desktop", name: .exportAudio)
+                        
+                        Divider().padding(.vertical, 16)
+                        
+                        HStack {
+                            Text("Shortcuts are global and work from any app.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Button("Reset to Defaults") {
+                                resetShortcuts()
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                        }
+                    }
+                }
+                
                 // Section: System & Appearance
                 PreferenceSection(title: "Application", icon: "window.badge.magnifyingglass") {
                     VStack(alignment: .leading, spacing: 16) {
@@ -114,15 +142,6 @@ struct PreferencesView: View {
                         
                         Divider()
                         
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Keyboard Shortcut")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            KeyboardShortcuts.Recorder("Export Audio", name: .exportAudio)
-                        }
-                        
-                        Divider()
-                        
                         Toggle("Start at Login", isOn: $launchManager.isLaunchAtLoginEnabled)
                             .toggleStyle(.switch)
                         
@@ -131,7 +150,7 @@ struct PreferencesView: View {
                         Toggle(isOn: $vm.telemetryEnabled) {
                             VStack(alignment: .leading) {
                                 Text("Anonymous Analytics")
-                                Text("Help improve SuperSay by sharing anonymous usage statistics.")
+                                Text("Help improve SuperSay by sharing anonymous usage statistics with himudigonda.me")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -154,6 +173,28 @@ struct PreferencesView: View {
             }
             .padding(40)
             .frame(maxWidth: 800)
+        }
+    }
+    
+    private func resetShortcuts() {
+        for name in KeyboardShortcuts.Name.allCases {
+            KeyboardShortcuts.reset(name)
+        }
+    }
+}
+
+struct ShortcutRow: View {
+    let title: String
+    let name: KeyboardShortcuts.Name
+    
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.body)
+                .fontWeight(.medium)
+            Spacer()
+            KeyboardShortcuts.Recorder(for: name)
+                .font(.body)
         }
     }
 }

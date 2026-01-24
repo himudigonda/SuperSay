@@ -7,17 +7,16 @@ class TelemetryService {
     @AppStorage("anonymousUserID") private var userID = UUID().uuidString
     @AppStorage("telemetryEnabled") private var enabled = true
     
-    // Stats kept in UserDefaults
+    // Stats kept in UserDefaults (Keep these local for persistence)
     @AppStorage("statAppLaunches") private var appLaunches = 0
     @AppStorage("statGenerations") private var generations = 0
     @AppStorage("statExports") private var exports = 0
     @AppStorage("statCharsProcessed") private var charsProcessed = 0
     
-    // Mock Telemetry Endpoint (Replace with your actual analytics URL)
-    private let endpoint = "https://api.supersay.app/v1/telemetry" 
+    // --- TARGET IS YOUR WEBSITE ---
+    private let endpoint = "https://himudigonda.me/api/telemetry"
     
     private init() {
-        // Ensure userID is persistent
         if userID.isEmpty { userID = UUID().uuidString }
     }
     
@@ -40,36 +39,37 @@ class TelemetryService {
     private func sendTelemetry(event: String, metadata: [String: Any] = [:]) {
         guard enabled else { return }
         
-        // In a real app, you would POST to your endpoint here.
-        // For now, we log to console so the user can see the "collection" happening.
-        print("📊 Telemetry: [\(event)] user: \(userID.prefix(8))... data: \(metadata)")
+        // Prepare payload with global context
+        let payload: [String: Any] = [
+            "event": event,
+            "user_id": userID,
+            "platform": "macOS",
+            "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0",
+            "metadata": metadata
+        ]
         
-        // Example native implementation:
-        /*
-        var payload = metadata
-        payload["event"] = event
-        payload["user_id"] = userID
-        payload["platform"] = "macOS"
-        payload["version"] = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        guard let url = URL(string: endpoint) else { 
+            print("❌ Telemetry Failed: Invalid endpoint URL.")
+            return 
+        }
         
-        guard let url = URL(string: endpoint) else { return }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
         
+        // Send asynchronously
         URLSession.shared.dataTask(with: request).resume()
-        */
+        print("📊 Telemetry: [\(event)] sent to himudigonda.me")
     }
     
-    // Helper for README/Stats display
     func getStatsSummary() -> String {
         return """
-        --- SuperSay Stats ---
+        --- SuperSay Stats (Local Counter) ---
         Total Generations: \(generations)
         Characters Read: \(charsProcessed)
         Audio Exports: \(exports)
-        -----------------------
+        -------------------------------------
         """
     }
 }

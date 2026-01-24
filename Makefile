@@ -2,17 +2,55 @@
 # SuperSay Automation Pipeline
 # ==========================================
 
-.PHONY: all setup lint test build-backend build-app run clean
+# Configuration
+PROJECT_PATH = frontend/SuperSay/SuperSay.xcodeproj
+SCHEME = SuperSay
+CONFIG = Release
+BUILD_DIR = build
+APP_PATH = $(BUILD_DIR)/DerivedData/Build/Products/$(CONFIG)/SuperSay.app
 
-# Default: Setup and Build everything
-all: setup build-backend build-app
+.PHONY: all setup backend app run clean lint test format
 
-# --- 🛠️ SETUP & INSTALLATION ---
+# Default: Run the full pipeline
+all: run
+
+# --- 🛠️ SETUP ---
 setup:
 	@echo "📦 Installing Python Dependencies..."
 	cd backend && uv sync
 	@echo "📦 Checking Swift Environment..."
 	xcode-select -p || echo "⚠️ Xcode not found!"
+
+# --- 🐍 BACKEND ---
+backend:
+	@echo "------------------------------------------------"
+	@echo "🚀 [1/3] Building Python Backend..."
+	@echo "------------------------------------------------"
+	chmod +x scripts/compile_backend.sh
+	./scripts/compile_backend.sh
+
+# --- 🍎 FRONTEND ---
+app:
+	@echo "------------------------------------------------"
+	@echo "🔨 [2/3] Building macOS Application..."
+	@echo "------------------------------------------------"
+	xcodebuild -project $(PROJECT_PATH) \
+		-scheme $(SCHEME) \
+		-configuration $(CONFIG) \
+		-derivedDataPath $(BUILD_DIR)/DerivedData \
+		-quiet \
+		clean build
+	@echo "✅ Build Successful: $(APP_PATH)"
+
+# --- 🚀 LAUNCH ---
+run: backend app
+	@echo "------------------------------------------------"
+	@echo "🎉 [3/3] Launching SuperSay..."
+	@echo "------------------------------------------------"
+	# Kill existing instance if running
+	pkill -x "SuperSay" || true
+	# Open the newly built app
+	open $(APP_PATH)
 
 # --- 🔍 CODE QUALITY ---
 lint:
@@ -30,32 +68,9 @@ test:
 	@echo "🧪 Testing Backend..."
 	cd backend && uv run pytest
 
-# --- 🏗️ BUILD PIPELINE ---
-build-backend:
-	@echo "🔨 Compiling Python Backend..."
-	./scripts/compile_backend.sh
-
-build-app:
-	@echo "🔨 Building macOS Application..."
-	# This builds the app and puts it in build/
-	xcodebuild -project frontend/SuperSay/SuperSay.xcodeproj \
-		-scheme SuperSay \
-		-configuration Release \
-		-derivedDataPath build/DerivedData \
-		clean build
-
-dmg: build-backend
-	@echo "💿 Creating Installer..."
-	./scripts/create_dmg.sh 1.0.0
-
-# --- 🚀 RUNNING ---
-run:
-	@echo "🚀 Launching SuperSay..."
-	open frontend/SuperSay/SuperSay.xcodeproj
-
-# --- 🗑️ CLEANUP ---
+# --- 🧹 UTILS ---
 clean:
 	@echo "🗑️ Cleaning artifacts..."
 	rm -rf backend/dist backend/build
-	rm -rf build/
+	rm -rf $(BUILD_DIR)
 	rm -rf frontend/SuperSay/SuperSay/Resources/SuperSayServer

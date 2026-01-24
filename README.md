@@ -35,8 +35,17 @@ graph LR
     D -->|Playback| E[Speakers]
 ```
 
-*   **Frontend**: Native SwiftUI app handling system events, global hotkeys, and audio session management.
-*   **Backend**: A lightweight FastAPI server wrapping the ONNX runtime for high-performance inference.
+* **Frontend**: Native SwiftUI app handling system events, global hotkeys, and audio session management.
+* **Backend**: A lightweight FastAPI server wrapping the ONNX runtime for high-performance inference.
+
+### ⚡ Fast-Track Development
+
+We use a **Makefile** to automate the entire build pipeline.
+
+```bash
+# Builds backend, compiles app, and launches it in one command
+make run
+```
 
 ## 🚀 Quick Start
 
@@ -70,12 +79,12 @@ uv sync
 
 ## 📚 Documentation
 
-*   [**Architecture Deep Dive**](docs/ARCHITECTURE.md): How the Swift-Python bridge works.
-*   [**Feature Roadmap**](docs/ROADMAP.md): What's coming next.
-*   [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and best practices.
-*   [**Backend Details**](backend/README.md): API and Model technicals.
-*   [**Frontend Details**](frontend/README.md): SwiftUI architecture.
-*   [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
+* [**Architecture Deep Dive**](docs/ARCHITECTURE.md): How the Swift-Python bridge works.
+* [**Feature Roadmap**](docs/ROADMAP.md): What's coming next.
+* [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and best practices.
+* [**Backend Details**](backend/README.md): API and Model technicals.
+* [**Frontend Details**](frontend/README.md): SwiftUI architecture.
+* [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
 
 ## 👩💻 For Developers
 
@@ -93,12 +102,13 @@ We use a **Makefile** to automate the entire lifecycle.
 | `make build-backend` | Compiles the Python AI engine into a standalone binary. |
 | `make dmg` | Builds the full macOS app and wraps it in a `.dmg` installer. |
 
-### 📊 Telemetry & Analytics
+### 📊 Website-Backed Analytics
 
-SuperSay includes a privacy-focused telemetry module (`TelemetryService.swift`).
-* **Collected Data:** App Launches, Character Counts, Export Counts.
-* **Privacy:** No text content is ever logged or transmitted.
-* **Configuration:** Users can opt-out via the "The Lab" settings panel.
+SuperSay includes an optional analytics module to help us track overall product health and growth.
+
+* **Collected Data:** App Launches, Total Characters Read, Audio Export Counts. **No text content is ever collected.**
+* **Privacy:** All data is sent to a centralized endpoint (`https://himudigonda.me/api/telemetry`) keyed by a unique, anonymous ID. Users can opt-out in **Preferences**.
+* **Transparency:** The service implementation is fully open-source in `TelemetryService.swift`.
 
 ## 🤝 Contributing
 
