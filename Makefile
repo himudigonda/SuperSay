@@ -40,6 +40,9 @@ app:
 		-derivedDataPath $(BUILD_DIR)/DerivedData \
 		-quiet \
 		clean build
+	@echo "📦 Injecting Custom Fonts..."
+	mkdir -p $(APP_PATH)/Contents/Resources/Fonts
+	cp frontend/SuperSay/SuperSay/Resources/Fonts/*.ttf $(APP_PATH)/Contents/Resources/Fonts/
 	@echo "✅ Build Successful: $(APP_PATH)"
 
 # --- 🚀 LAUNCH ---

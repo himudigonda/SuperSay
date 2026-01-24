@@ -32,7 +32,7 @@ struct MainDashboardView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("SUPER SAY")
-                    .font(.system(size: 11, weight: .black, design: .rounded))
+                    .font(vm.appFont(size: 11, weight: .black))
                     .kerning(3)
                     .foregroundStyle(.secondary)
                 
@@ -42,7 +42,7 @@ struct MainDashboardView: View {
                         .frame(width: 6, height: 6)
                     
                     Text(vm.isBackendOnline ? "SYSTEM ONLINE" : "OFFLINE")
-                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .font(vm.appFont(size: 9, weight: .bold))
                         .foregroundStyle(vm.isBackendOnline ? .green : .red)
                 }
             }
@@ -50,7 +50,7 @@ struct MainDashboardView: View {
             
             HStack(spacing: 12) {
                 Text(vm.status.message.uppercased())
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(vm.appFont(size: 10, weight: .bold))
                     .kerning(1.5)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
@@ -64,7 +64,7 @@ struct MainDashboardView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "square.and.arrow.down.fill")
                             Text("SAVE")
-                                .font(.system(size: 10, weight: .black, design: .rounded))
+                                .font(vm.appFont(size: 10, weight: .black))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
@@ -99,13 +99,13 @@ struct MainDashboardView: View {
             
             VStack(spacing: 12) {
                 Text(vm.currentVoiceDisplay.uppercased()) // Simplified display logic
-                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .font(vm.appFont(size: 14, weight: .bold))
                     .foregroundStyle(.secondary)
                 
                 let total = audio.duration
                 let current = isEditingSlider ? localProgress * total : audio.currentTime
                 Text(formatTime(current))
-                    .font(.system(size: 32, weight: .thin, design: .monospaced))
+                    .font(vm.appFont(size: 32, weight: .thin))
                     .contentTransition(.numericText())
             }
         }
@@ -149,6 +149,7 @@ struct MainDashboardView: View {
 }
 
 struct TransportButton: View {
+    @EnvironmentObject var vm: DashboardViewModel
     let icon: String
     let size: CGFloat
     let action: () -> Void
@@ -156,7 +157,7 @@ struct TransportButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
-                .font(.system(size: size, weight: .semibold))
+                .font(vm.appFont(size: size, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
         .buttonStyle(.plain)

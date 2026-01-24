@@ -23,17 +23,26 @@ struct SuperSayWindow: View {
                     
                     VStack(alignment: .leading, spacing: 0) {
                         Text("SuperSay")
-                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .font(vm.appFont(size: 16, weight: .bold))
                     }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
                 
                 List(selection: $vm.selectedTab) {
-                    Section("Library") {
-                        NavigationLink(value: "home") { Label("Now Playing", systemImage: "play.circle.fill") }
-                        NavigationLink(value: "library") { Label("Audiobooks", systemImage: "book.closed.fill") }
-                        NavigationLink(value: "history") { Label("The Vault", systemImage: "clock.arrow.circlepath") }
+                    Section(header: Text("Library").font(vm.appFont(size: 11, weight: .bold))) {
+                        NavigationLink(value: "home") { 
+                            Label("Now Playing", systemImage: "play.circle.fill")
+                                .font(vm.appFont(size: 13))
+                        }
+                        NavigationLink(value: "library") { 
+                            Label("Audiobooks", systemImage: "book.closed.fill")
+                                .font(vm.appFont(size: 13))
+                        }
+                        NavigationLink(value: "history") { 
+                            Label("The Vault", systemImage: "clock.arrow.circlepath")
+                                .font(vm.appFont(size: 13))
+                        }
                     }
                 }
                 .listStyle(.sidebar)
@@ -51,6 +60,7 @@ struct SuperSayWindow: View {
                         HStack {
                             Image(systemName: "gearshape.fill")
                             Text("Preferences")
+                                .font(vm.appFont(size: 13, weight: .medium))
                             Spacer()
                         }
                         .padding(.vertical, 8)
@@ -67,12 +77,12 @@ struct SuperSayWindow: View {
                 // DEVELOPER ATTRIBUTION
                 VStack(alignment: .leading, spacing: 6) {
                     Text("DEVELOPED BY")
-                        .font(.system(size: 8, weight: .black))
+                        .font(vm.appFont(size: 8, weight: .black))
                         .kerning(1)
                         .foregroundStyle(.secondary.opacity(0.5))
                     
                     Text("Himansh Mudigonda")
-                        .font(.system(size: 11, weight: .bold))
+                        .font(vm.appFont(size: 11, weight: .bold))
                         .foregroundStyle(.secondary)
                     
                     HStack(spacing: 18) {
@@ -139,10 +149,10 @@ struct SuperSayWindow: View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(vm.status == .speaking ? "SPEAKING" : "PAUSED")
-                    .font(.system(size: 8, weight: .black))
+                    .font(vm.appFont(size: 8, weight: .black))
                     .foregroundStyle(.cyan)
                 Text(history.history.first?.text ?? "Reading...")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(vm.appFont(size: 11, weight: .medium))
                     .lineLimit(1)
             }
             .frame(width: 250, alignment: .leading)

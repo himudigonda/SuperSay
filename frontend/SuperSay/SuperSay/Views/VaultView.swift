@@ -5,6 +5,7 @@ struct VaultView: View {
     @EnvironmentObject var dashboardVM: DashboardViewModel
     @State private var searchText = ""
     @State private var showOnlyFavorites = false
+    @State private var selectedEntry: HistoryEntry? = nil
     
     // Group entries by day
     private var groupedEntries: [(Date, [HistoryEntry])] {
@@ -24,12 +25,12 @@ struct VaultView: View {
         List {
             ForEach(groupedEntries, id: \.0) { date, entries in
                 Section(header: Text(date, style: .date)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .font(dashboardVM.appFont(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .kerning(1)
                 ) {
                     ForEach(entries) { entry in
-                        VaultEntryRow(entry: entry)
+                        VaultEntryRow(entry: entry, selectedEntry: $selectedEntry)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                                 Button(role: .destructive) {
                                     history.delete(entry: entry)
@@ -52,6 +53,9 @@ struct VaultView: View {
         .scrollContentBackground(.hidden)
         .navigationTitle("Vault")
         .searchable(text: $searchText, placement: .sidebar, prompt: "Search spoken text...")
+        .sheet(item: $selectedEntry) { entry in
+            VaultEntryDetailView(entry: entry)
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 HStack(spacing: 15) {
@@ -78,12 +82,13 @@ struct VaultEntryRow: View {
     @EnvironmentObject var history: HistoryManager
     @EnvironmentObject var dashboardVM: DashboardViewModel
     let entry: HistoryEntry
+    @Binding var selectedEntry: HistoryEntry?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
                 Text(entry.timestamp, style: .time)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(dashboardVM.appFont(size: 10, weight: .regular))
                     .foregroundColor(.cyan)
                 Spacer()
                 
@@ -94,14 +99,19 @@ struct VaultEntryRow: View {
                 }
                 
                 Text(entry.voice)
-                    .font(.system(size: 8, design: .monospaced))
+                    .font(dashboardVM.appFont(size: 8, weight: .regular))
                     .foregroundColor(.secondary)
             }
             Text(entry.text)
-                .lineLimit(2)
-                .font(.system(.subheadline, design: .rounded))
+                .lineLimit(3)
+                .font(dashboardVM.appFont(size: 15, weight: .medium))
+                .foregroundStyle(.primary.opacity(0.9))
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            selectedEntry = entry
+        }
         .contextMenu {
             Button("Re-Speak") { 
                 Task { await dashboardVM.speak(text: entry.text) } 
@@ -120,5 +130,77 @@ struct VaultEntryRow: View {
                 Label("Delete", systemImage: "trash")
             }
         }
+    }
+}
+
+struct VaultEntryDetailView: View {
+    @Environment(\.dismiss) var dismiss
+    @EnvironmentObject var vm: DashboardViewModel
+    let entry: HistoryEntry
+    
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(entry.timestamp, style: .date)
+                        .font(vm.appFont(size: 12, weight: .bold))
+                    Text(entry.voice.uppercased())
+                        .font(vm.appFont(size: 10, weight: .black))
+                        .foregroundStyle(.cyan)
+                }
+                Spacer()
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+            
+            ScrollView {
+                Text(entry.text)
+                    .font(vm.appFont(size: 18, weight: .regular))
+                    .lineSpacing(8)
+                    .padding(32)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            
+            HStack(spacing: 16) {
+                Button {
+                    Task { 
+                        dismiss()
+                        await vm.speak(text: entry.text) 
+                    }
+                } label: {
+                    Label("RE-SPEAK", systemImage: "play.fill")
+                        .font(vm.appFont(size: 12, weight: .black))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(Color.cyan)
+                        .foregroundStyle(.black)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(entry.text, forType: .string)
+                } label: {
+                    Label("COPY", systemImage: "doc.on.doc.fill")
+                        .font(vm.appFont(size: 12, weight: .bold))
+                        .padding(.horizontal, 20)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(24)
+            .background(.ultraThinMaterial)
+        }
+        .frame(minWidth: 500, minHeight: 400)
+        .background(Color(NSColor.windowBackgroundColor))
     }
 }

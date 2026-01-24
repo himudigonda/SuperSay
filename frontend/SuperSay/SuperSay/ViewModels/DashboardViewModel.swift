@@ -21,6 +21,25 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("cleanURLs") var cleanURLs = true
     @AppStorage("appTheme") var appTheme = "system" // system, light, dark
     @AppStorage("telemetryEnabled") var telemetryEnabled = true
+    @AppStorage("selectedFontName") var selectedFontName = "System Rounded"
+    
+    // Helper to get Font
+    func appFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        switch selectedFontName {
+        case "System Rounded":
+            return .system(size: size, weight: weight, design: .rounded)
+        case "System Mono":
+            return .system(size: size, weight: weight, design: .monospaced)
+        case "System Serif":
+            return .system(size: size, weight: weight, design: .serif)
+        case "System Standard":
+            return .system(size: size, weight: weight, design: .default)
+        case "Poppins":
+            return .custom("Poppins-Regular", size: size).weight(weight)
+        default:
+            return .custom(selectedFontName, size: size).weight(weight)
+        }
+    }
     
     // Computed property for display
     var currentVoiceDisplay: String {
@@ -119,5 +138,19 @@ class DashboardViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
             }
         }
+    }
+    
+    // --- FONT PANEL SUPPORT ---
+    func showFontPanel() {
+        NSFontManager.shared.target = self
+        NSFontManager.shared.action = #selector(changeFont(_:))
+        NSFontPanel.shared.orderFront(nil)
+        NSFontPanel.shared.isEnabled = true
+    }
+    
+    @objc func changeFont(_ sender: Any?) {
+        guard let fontManager = sender as? NSFontManager else { return }
+        let newFont = fontManager.convert(.systemFont(ofSize: 12))
+        self.selectedFontName = newFont.familyName ?? "System Standard"
     }
 }

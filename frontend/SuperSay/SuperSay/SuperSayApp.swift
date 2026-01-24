@@ -47,6 +47,24 @@ struct SuperSayApp: App {
         setupShortcuts(vm: vmInstance, audio: audioInstance)
         
         MetricsService.shared.trackLaunch()
+        registerCustomFonts()
+    }
+    
+    private func registerCustomFonts() {
+        let fontFolder = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/Fonts")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: fontFolder, includingPropertiesForKeys: nil) else {
+            print("📝 FontLoader: No bundled fonts found or directory inaccessible.")
+            return
+        }
+        
+        for url in files where ["ttf", "otf"].contains(url.pathExtension.lowercased()) {
+            var error: Unmanaged<CFError>?
+            if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                print("⚠️ FontLoader: Failed to register font at \(url.path): \(error?.takeRetainedValue().localizedDescription ?? "Unknown error")")
+            } else {
+                print("✅ FontLoader: Registered \(url.lastPathComponent)")
+            }
+        }
     }
     
     private func requestNotificationPermission() {

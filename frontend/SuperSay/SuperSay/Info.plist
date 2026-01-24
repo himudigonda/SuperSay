@@ -33,5 +33,9 @@
     <!-- App doesn't require focus -->
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
+    
+    <!-- Custom Fonts Path -->
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
 </dict>
 </plist>

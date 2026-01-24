@@ -12,9 +12,9 @@ struct PreferencesView: View {
                 // Header
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Preferences")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
+                        .font(vm.appFont(size: 34, weight: .bold))
                     Text("Configure SuperSay to match your workflow.")
-                        .font(.system(.subheadline, design: .rounded))
+                        .font(vm.appFont(size: 14))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 8)
@@ -24,6 +24,7 @@ struct PreferencesView: View {
                     VStack(spacing: 20) {
                         HStack {
                             Label("Active Voice", systemImage: "person.wave.2")
+                                .font(vm.appFont(size: 14))
                             Spacer()
                             Picker("", selection: $vm.selectedVoice) {
                                 Group {
@@ -47,9 +48,10 @@ struct PreferencesView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Label("Speech Speed", systemImage: "gauge.with.needle")
+                                    .font(vm.appFont(size: 14))
                                 Spacer()
                                 Text("\(String(format: "%.1f", vm.speechSpeed))x")
-                                    .font(.system(.body, design: .monospaced))
+                                    .font(vm.appFont(size: 14, weight: .bold).monospaced())
                                     .foregroundStyle(.cyan)
                                     .fontWeight(.bold)
                             }
@@ -60,9 +62,10 @@ struct PreferencesView: View {
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Label("Master Volume", systemImage: "speaker.wave.3")
+                                    .font(vm.appFont(size: 14))
                                 Spacer()
                                 Text("\(Int(vm.speechVolume * 100))%")
-                                    .font(.system(.body, design: .monospaced))
+                                    .font(vm.appFont(size: 14, weight: .bold).monospaced())
                                     .foregroundStyle(.cyan)
                                     .fontWeight(.bold)
                             }
@@ -78,8 +81,9 @@ struct PreferencesView: View {
                         Toggle(isOn: $vm.enableDucking) {
                             VStack(alignment: .leading) {
                                 Text("Music Ducking")
+                                    .font(vm.appFont(size: 16))
                                 Text("Attenuates background music while SuperSay is speaking.")
-                                    .font(.caption)
+                                    .font(vm.appFont(size: 12))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -89,8 +93,9 @@ struct PreferencesView: View {
                         Toggle(isOn: $vm.cleanURLs) {
                             VStack(alignment: .leading) {
                                 Text("Sanitize URLs")
+                                    .font(vm.appFont(size: 16))
                                 Text("Automatically removes complex URLs and handles from spoken text.")
-                                    .font(.caption)
+                                    .font(vm.appFont(size: 12))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -112,14 +117,14 @@ struct PreferencesView: View {
                         
                         HStack {
                             Text("Shortcuts are global and work from any app.")
-                                .font(.caption)
+                                .font(vm.appFont(size: 12))
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Button("Reset to Defaults") {
                                 resetShortcuts()
                             }
                             .buttonStyle(.borderless)
-                            .font(.caption)
+                            .font(vm.appFont(size: 12))
                             .foregroundStyle(.red)
                         }
                     }
@@ -130,11 +135,12 @@ struct PreferencesView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack {
                             Text("Theme")
+                                .font(vm.appFont(size: 14))
                             Spacer()
                             Picker("", selection: $vm.appTheme) {
-                                Text("System").tag("system")
-                                Text("Light").tag("light")
-                                Text("Dark").tag("dark")
+                                Text("System")
+                                Text("Light")
+                                Text("Dark")
                             }
                             .pickerStyle(.segmented)
                             .frame(width: 200)
@@ -142,16 +148,56 @@ struct PreferencesView: View {
                         
                         Divider()
                         
-                        Toggle("Start at Login", isOn: $launchManager.isLaunchAtLoginEnabled)
-                            .toggleStyle(.switch)
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Typography")
+                                    .font(vm.appFont(size: 14, weight: .bold))
+                                Text("Current: \(vm.selectedFontName)")
+                                    .font(vm.appFont(size: 11))
+                                    .foregroundStyle(.cyan)
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 12) {
+                                Picker("", selection: $vm.selectedFontName) {
+                                    Text("System Rounded").tag("System Rounded")
+                                    Text("System Standard").tag("System Standard")
+                                    Text("System Mono").tag("System Mono")
+                                    Text("System Serif").tag("System Serif")
+                                    Divider()
+                                    Text("Poppins").tag("Poppins")
+                                }
+                                .frame(width: 200)
+                                
+                                Button {
+                                    vm.showFontPanel()
+                                } label: {
+                                    Label("More Fonts...", systemImage: "textformat.size")
+                                        .font(vm.appFont(size: 11, weight: .semibold))
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Capsule())
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                         
                         Divider()
                         
-                        Toggle(isOn: $vm.telemetryEnabled) {
-                            VStack(alignment: .leading) {
+                        Toggle(isOn: $launchManager.isLaunchAtLoginEnabled) {
+                            Text("Start at Login")
+                                .font(vm.appFont(size: 14))
+                        }
+                        .toggleStyle(.switch)
+                        
+                        Divider()
+                        
+                         Toggle(isOn: $vm.telemetryEnabled) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 Text("Anonymous Analytics")
+                                    .font(vm.appFont(size: 14, weight: .bold))
                                 Text("Help improve SuperSay by sharing anonymous usage statistics with himudigonda.me")
-                                    .font(.caption)
+                                    .font(vm.appFont(size: 11))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -163,8 +209,9 @@ struct PreferencesView: View {
                             audio.exportToDesktop()
                         } label: {
                             Label("Export Last Clip to Desktop", systemImage: "square.and.arrow.down")
+                                .font(vm.appFont(size: 13, weight: .bold))
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 4)
+                                .padding(.vertical, 8)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(.cyan)
@@ -185,22 +232,22 @@ struct PreferencesView: View {
 }
 
 struct ShortcutRow: View {
+    @EnvironmentObject var vm: DashboardViewModel
     let title: String
     let name: KeyboardShortcuts.Name
     
     var body: some View {
         HStack {
             Text(title)
-                .font(.body)
-                .fontWeight(.medium)
+                .font(vm.appFont(size: 14, weight: .medium))
             Spacer()
             KeyboardShortcuts.Recorder(for: name)
-                .font(.body)
         }
     }
 }
 
 struct PreferenceSection<Content: View>: View {
+    @EnvironmentObject var vm: DashboardViewModel
     let title: String
     let icon: String
     let content: Content
@@ -218,7 +265,7 @@ struct PreferenceSection<Content: View>: View {
                     .foregroundStyle(.cyan)
                     .font(.headline)
                 Text(title.uppercased())
-                    .font(.system(size: 13, weight: .bold))
+                    .font(vm.appFont(size: 13, weight: .bold))
                     .foregroundStyle(.secondary)
                     .kerning(1)
             }
