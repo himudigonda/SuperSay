@@ -35,15 +35,34 @@ struct SuperSayWindow: View {
                         NavigationLink(value: "library") { Label("Audiobooks", systemImage: "book.closed.fill") }
                         NavigationLink(value: "history") { Label("The Vault", systemImage: "clock.arrow.circlepath") }
                     }
-                    
-                    Section("System") {
-                        NavigationLink(value: "settings") { Label("The Lab", systemImage: "terminal.fill") }
-                    }
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
                 
                 Spacer()
+                
+                // SYSTEM / PREFERENCES AT BOTTOM
+                VStack(spacing: 8) {
+                    Divider().padding(.horizontal, 20).opacity(0.3)
+                    
+                    Button {
+                        vm.selectedTab = "preferences"
+                    } label: {
+                        HStack {
+                            Image(systemName: "gearshape.fill")
+                            Text("Preferences")
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(vm.selectedTab == "preferences" ? Color.cyan.opacity(0.15) : Color.clear)
+                        .foregroundStyle(vm.selectedTab == "preferences" ? .cyan : .primary)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                }
+                .padding(.bottom, 8)
                 
                 // DEVELOPER ATTRIBUTION
                 VStack(alignment: .leading, spacing: 6) {
@@ -111,7 +130,7 @@ struct SuperSayWindow: View {
         case "home": MainDashboardView()
         case "library": LibraryView()
         case "history": VaultView()
-        case "settings": LabView()
+        case "preferences": PreferencesView()
         default: MainDashboardView()
         }
     }
