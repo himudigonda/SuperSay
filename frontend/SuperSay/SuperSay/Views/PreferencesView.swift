@@ -14,7 +14,7 @@ struct PreferencesView: View {
                     Text("Preferences")
                         .font(.system(size: 34, weight: .bold, design: .rounded))
                     Text("Configure SuperSay to match your workflow.")
-                        .font(.subheadline)
+                        .font(.system(.subheadline, design: .rounded))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 8)

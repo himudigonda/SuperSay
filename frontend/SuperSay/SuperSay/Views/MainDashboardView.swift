@@ -32,7 +32,7 @@ struct MainDashboardView: View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 6) {
                 Text("SUPER SAY")
-                    .font(.system(size: 11, weight: .black))
+                    .font(.system(size: 11, weight: .black, design: .rounded))
                     .kerning(3)
                     .foregroundStyle(.secondary)
                 
@@ -50,8 +50,8 @@ struct MainDashboardView: View {
             
             HStack(spacing: 12) {
                 Text(vm.status.message.uppercased())
-                    .font(.system(size: 10, weight: .bold))
-                    .kerning(2)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .kerning(1.5)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .foregroundStyle(.primary)
@@ -64,7 +64,7 @@ struct MainDashboardView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "square.and.arrow.down.fill")
                             Text("SAVE")
-                                .font(.system(size: 10, weight: .black))
+                                .font(.system(size: 10, weight: .black, design: .rounded))
                         }
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)

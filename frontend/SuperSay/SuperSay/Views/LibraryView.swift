@@ -12,7 +12,7 @@ struct LibraryView: View {
                 // Drop Zone
                 VStack(spacing: 20) {
                     Image(systemName: "doc.badge.plus").font(.system(size: 60))
-                    Text("Drop PDF").font(.headline)
+                    Text("Drop PDF").font(.system(.headline, design: .rounded))
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .onDrop(of: [UTType.pdf], isTargeted: $isHovering) { providers in
@@ -25,7 +25,7 @@ struct LibraryView: View {
             } else {
                 // List
                 HStack {
-                    Text(pdf.title).font(.headline)
+                    Text(pdf.title).font(.system(.headline, design: .rounded))
                     Spacer()
                     Button("Clear") { pdf.pages = [] }
                 }.padding()

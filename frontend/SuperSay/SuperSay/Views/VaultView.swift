@@ -24,7 +24,7 @@ struct VaultView: View {
         List {
             ForEach(groupedEntries, id: \.0) { date, entries in
                 Section(header: Text(date, style: .date)
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
                     .foregroundStyle(.secondary)
                     .kerning(1)
                 ) {
@@ -99,7 +99,7 @@ struct VaultEntryRow: View {
             }
             Text(entry.text)
                 .lineLimit(2)
-                .font(.subheadline)
+                .font(.system(.subheadline, design: .rounded))
         }
         .padding(.vertical, 4)
         .contextMenu {
