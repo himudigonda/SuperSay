@@ -105,7 +105,7 @@ struct SuperSayWindow: View {
                 }
                 .padding(24)
             }
-            .navigationSplitViewColumnWidth(min: 220, ideal: 240)
+            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         } detail: {
             ZStack(alignment: .bottom) {
                 // MAIN CONTENT
@@ -120,7 +120,7 @@ struct SuperSayWindow: View {
             }
             .background(adaptiveBackdrop)
         }
-        .frame(minWidth: 1000, minHeight: 750)
+        .frame(minWidth: 800, minHeight: 600)
         .preferredColorScheme(vm.appTheme == "system" ? nil : (vm.appTheme == "dark" ? .dark : .light))
     }
     

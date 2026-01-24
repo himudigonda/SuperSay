@@ -59,19 +59,19 @@ struct MainDashboardView: View {
     }
     
     private var visualizerSection: some View {
-        VStack(spacing: 40) {
+        VStack(spacing: 30) {
             ZStack {
-                Circle().stroke(lineWidth: 1).foregroundStyle(.primary.opacity(0.05)).frame(width: 300, height: 300)
+                Circle().stroke(lineWidth: 1).foregroundStyle(.primary.opacity(0.05)).frame(width: 260, height: 260)
                 
                 Circle()
                     .stroke(lineWidth: 1.5)
                     .foregroundStyle(vm.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(0.6)) : AnyShapeStyle(Color.primary.opacity(0.05)))
-                    .frame(width: 240, height: 240)
+                    .frame(width: 200, height: 200)
                     .scaleEffect(vm.status == .speaking ? 1.08 : 1.0)
                     .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: vm.status == .speaking)
                 
                 Image(systemName: "waveform")
-                    .font(.system(size: 100, weight: .ultraLight))
+                    .font(.system(size: 80, weight: .ultraLight))
                     .symbolEffect(.bounce, value: vm.status == .speaking)
             }
             
@@ -116,7 +116,7 @@ struct MainDashboardView: View {
                 TransportButton(icon: "forward.fill", size: 20) { audio.seek(to: min(1, audio.progress + 0.1)) }
             }
         }
-        .padding(.bottom, 60)
+        .padding(.bottom, 40)
     }
     
     private func formatTime(_ time: TimeInterval) -> String {
