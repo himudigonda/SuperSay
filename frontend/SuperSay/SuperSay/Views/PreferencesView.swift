@@ -137,11 +137,11 @@ struct PreferencesView: View {
                             Text("Theme")
                                 .font(vm.appFont(size: 14))
                             Spacer()
-                            Picker("", selection: $vm.appTheme) {
-                                Text("System")
-                                Text("Light")
-                                Text("Dark")
-                            }
+                                Picker("", selection: $vm.appTheme) {
+                                    Text("System").tag("system")
+                                    Text("Light").tag("light")
+                                    Text("Dark").tag("dark")
+                                }
                             .pickerStyle(.segmented)
                             .frame(width: 200)
                         }

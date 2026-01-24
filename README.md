@@ -2,7 +2,11 @@
 
 > **Turn any text on your Mac into cinematic, ultra-realistic AI speech.**
 
-![SuperSay Banner](assets/SuperSay.png)
+<p align="center">
+  <img src="assets/SuperSay_Light.png" width="45%" alt="SuperSay Light Mode" />
+  &nbsp; &nbsp;
+  <img src="assets/SuperSay_Dark.png" width="45%" alt="SuperSay Dark Mode" />
+</p>
 
 ![macOS](https://img.shields.io/badge/macOS-14.0+-000000?style=for-the-badge&logo=apple&logoColor=white)
 ![Apple Silicon](https://img.shields.io/badge/Apple_Silicon-Native-007AFF?style=for-the-badge&logo=apple&logoColor=white)

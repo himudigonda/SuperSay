@@ -18,8 +18,17 @@ actor BackendService {
         
         let p = Process()
         p.executableURL = url
-        p.standardOutput = FileHandle.nullDevice // Redirect to null to prevent buffer clogging
-        p.standardError = FileHandle.standardError
+        
+        // redirect to log file
+        let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
+        if !FileManager.default.fileExists(atPath: logURL.path) {
+            FileManager.default.createFile(atPath: logURL.path, contents: nil)
+        }
+        let logHandle = try? FileHandle(forWritingTo: logURL)
+        logHandle?.seekToEndOfFile()
+        
+        p.standardOutput = logHandle
+        p.standardError = logHandle
         
         do {
             try p.run()
