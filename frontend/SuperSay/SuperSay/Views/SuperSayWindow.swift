@@ -93,7 +93,7 @@ struct SuperSayWindow: View {
             .background(adaptiveBackdrop)
         }
         .frame(minWidth: 1000, minHeight: 750)
-        // .preferredColorScheme(settings.appTheme == "system" ? nil : (settings.appTheme == "dark" ? .dark : .light))
+        .preferredColorScheme(vm.appTheme == "system" ? nil : (vm.appTheme == "dark" ? .dark : .light))
     }
     
     @ViewBuilder
@@ -145,7 +145,7 @@ struct SuperSayWindow: View {
 
     private var adaptiveBackdrop: some View {
         Group {
-            if settings.appTheme == "dark" || (settings.appTheme == "system" && colorScheme == .dark) {
+            if vm.appTheme == "dark" || (vm.appTheme == "system" && colorScheme == .dark) {
                 LinearGradient(colors: [Color.black, Color(white: 0.12)], startPoint: .top, endPoint: .bottom)
             } else {
                 LinearGradient(colors: [Color(white: 0.98), Color(white: 0.92)], startPoint: .top, endPoint: .bottom)

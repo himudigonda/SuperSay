@@ -125,3 +125,18 @@ struct MainDashboardView: View {
         return String(format: "%d:%02d", mins, secs)
     }
 }
+
+struct TransportButton: View {
+    let icon: String
+    let size: CGFloat
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+        .buttonStyle(.plain)
+    }
+}

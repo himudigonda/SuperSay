@@ -19,6 +19,7 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("speechVolume") var speechVolume = 1.0
     @AppStorage("enableDucking") var enableDucking = true
     @AppStorage("cleanURLs") var cleanURLs = true
+    @AppStorage("appTheme") var appTheme = "system" // system, light, dark
     
     // Computed property for display
     var currentVoiceDisplay: String {
@@ -99,7 +100,7 @@ class DashboardViewModel: ObservableObject {
         Task {
             while true {
                 isBackendOnline = await backend.checkHealth()
-                if !isBackendOnline { backend.start() }
+                if !isBackendOnline { await backend.start() }
                 try? await Task.sleep(nanoseconds: 2 * 1_000_000_000)
             }
         }

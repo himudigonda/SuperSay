@@ -2,34 +2,43 @@ import SwiftUI
 
 @main
 struct SuperSayApp: App {
-    // 1. Single Sources of Truth
-    @StateObject private var audio = AudioService()
-    @StateObject private var history = HistoryManager()
-    @StateObject private var pdf = PDFService()
-    @StateObject private var launchManager = LaunchManager()
+    // 1. Single Sources of Truth (Services)
+    @StateObject private var audio: AudioService
+    @StateObject private var history: HistoryManager
+    @StateObject private var pdf: PDFService
+    @StateObject private var launchManager: LaunchManager
     
-    // 2. Logic Controller
+    // 2. Logic Controller (ViewModel)
     @StateObject private var dashboardVM: DashboardViewModel
     
+    // 3. Backend (Kept private, managed by VM, but we own the instance to stop deinit)
+    private let backend: BackendService
+    
     init() {
-        // We create the dependencies first
-        let _backend = BackendService()
-        let _system = SystemService()
-        let _audio = AudioService()
-        let _history = HistoryManager()
+        // Create instances
+        let audioInstance = AudioService()
+        let historyInstance = HistoryManager()
+        let pdfInstance = PDFService()
+        let launchInstance = LaunchManager()
+        let backendInstance = BackendService()
+        let systemInstance = SystemService()
         
-        // We inject them into the VM
-        let vm = DashboardViewModel(
-            backend: _backend,
-            system: _system,
-            audio: _audio,
-            history: _history
+        // Create VM with dependency injection
+        let vmInstance = DashboardViewModel(
+            backend: backendInstance,
+            system: systemInstance,
+            audio: audioInstance,
+            history: historyInstance
         )
         
-        // We set the StateObjects
-        _dashboardVM = StateObject(wrappedValue: vm)
-        _audio = StateObject(wrappedValue: _audio)
-        _history = StateObject(wrappedValue: _history)
+        // Assign to StateObjects
+        _audio = StateObject(wrappedValue: audioInstance)
+        _history = StateObject(wrappedValue: historyInstance)
+        _pdf = StateObject(wrappedValue: pdfInstance)
+        _launchManager = StateObject(wrappedValue: launchInstance)
+        _dashboardVM = StateObject(wrappedValue: vmInstance)
+        
+        self.backend = backendInstance
     }
     
     var body: some Scene {
@@ -48,6 +57,7 @@ struct SuperSayApp: App {
             Button("Speak Selection") { Task { await dashboardVM.speakSelection() } }
             Button("Stop") { audio.stop() }
             Button("Quit") { 
+                Task { await backend.stop() }
                 NSApplication.shared.terminate(nil) 
             }
         } label: {

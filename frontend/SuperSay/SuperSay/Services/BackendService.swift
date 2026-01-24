@@ -7,7 +7,6 @@ actor BackendService {
     
     // MARK: - Process Management
     
-    @MainActor
     func start() {
         guard process == nil else { return }
         guard let url = Bundle.main.url(forResource: "SuperSayServer", withExtension: nil) else {
@@ -29,7 +28,6 @@ actor BackendService {
         }
     }
     
-    @MainActor
     func stop() {
         process?.terminate()
         process = nil
