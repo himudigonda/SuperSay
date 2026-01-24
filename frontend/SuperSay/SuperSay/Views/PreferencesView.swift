@@ -118,7 +118,7 @@ struct PreferencesView: View {
                             Text("Keyboard Shortcut")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                            KeyboardShortcuts.Recorder("", name: .exportToDesktop)
+                            KeyboardShortcuts.Recorder("Export Audio", name: .exportAudio)
                         }
                         
                         Divider()

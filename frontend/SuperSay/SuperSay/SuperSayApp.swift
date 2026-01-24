@@ -77,8 +77,8 @@ struct SuperSayApp: App {
             }
         }
         
-        KeyboardShortcuts.onKeyUp(for: .exportToDesktop) {
-            print("⌨️ KeyboardShortcuts: exportToDesktop triggered")
+        KeyboardShortcuts.onKeyUp(for: .exportAudio) {
+            print("⌨️ KeyboardShortcuts: exportAudio triggered")
             Task { @MainActor in
                 audio.exportToDesktop()
             }
