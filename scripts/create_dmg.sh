@@ -17,6 +17,10 @@ echo "🚀 Building SuperSay v${VERSION} for Release..."
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
+# 0. Compile Backend
+echo "🐍 Compiling Backend..."
+./scripts/compile_backend.sh
+
 # 1. Build the Release app bundle
 echo "🔨 Building Release configuration..."
 xcodebuild -project "${XCODE_PROJECT_DIR}/SuperSay.xcodeproj" \
@@ -52,6 +56,11 @@ mkdir -p "$STAGING_DIR"
 # Copy the app
 cp -R "$APP_PATH" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
+
+# Inject Fonts (Vital for correct Look & Feel)
+echo "📦 Injecting Custom Fonts into DMG staging..."
+mkdir -p "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts"
+cp frontend/SuperSay/SuperSay/Resources/Fonts/*.ttf "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts/"
 
 # 4. Create DMG (Standardized Check)
 if command -v create-dmg &> /dev/null; then
