@@ -77,6 +77,29 @@ uv sync
 *   [**Frontend Details**](frontend/README.md): SwiftUI architecture.
 *   [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
 
+## 👩💻 For Developers
+
+SuperSay includes a robust automation pipeline for code quality and building.
+
+### 🛠️ The One-Click Workflow
+
+We use a **Makefile** to automate the entire lifecycle.
+
+| Command | Action |
+| :--- | :--- |
+| `make setup` | Installs Python dependencies (uv) and checks Xcode. |
+| `make lint` | Runs **Ruff** (Python) and **SwiftLint** to enforce style. |
+| `make test` | Runs **Pytest** suites on the inference engine. |
+| `make build-backend` | Compiles the Python AI engine into a standalone binary. |
+| `make dmg` | Builds the full macOS app and wraps it in a `.dmg` installer. |
+
+### 📊 Telemetry & Analytics
+
+SuperSay includes a privacy-focused telemetry module (`TelemetryService.swift`).
+* **Collected Data:** App Launches, Character Counts, Export Counts.
+* **Privacy:** No text content is ever logged or transmitted.
+* **Configuration:** Users can opt-out via the "The Lab" settings panel.
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on how to set up your development environment and submit Pull Requests.
