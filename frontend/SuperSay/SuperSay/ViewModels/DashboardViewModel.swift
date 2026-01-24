@@ -153,4 +153,49 @@ class DashboardViewModel: ObservableObject {
         let newFont = fontManager.convert(.systemFont(ofSize: 12))
         self.selectedFontName = newFont.familyName ?? "System Standard"
     }
+    
+    // --- UPDATE CHECKER ---
+    func checkForUpdates() {
+        Task {
+            guard let url = URL(string: "https://api.github.com/repos/himudigonda/SuperSay/releases/latest") else { return }
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+                
+                let currentVersion = "v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
+                
+                if release.tag_name != currentVersion {
+                    print("🚀 New version available: \(release.tag_name)")
+                    DispatchQueue.main.async {
+                        let alert = NSAlert()
+                        alert.messageText = "Update Available"
+                        alert.informativeText = "A new version of SuperSay (\(release.tag_name)) is available."
+                        alert.addButton(withTitle: "Download")
+                        alert.addButton(withTitle: "Cancel")
+                        
+                        if alert.runModal() == .alertFirstButtonReturn {
+                            if let link = URL(string: release.html_url) {
+                                NSWorkspace.shared.open(link)
+                            }
+                        }
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        let alert = NSAlert()
+                        alert.messageText = "You're Up to Date"
+                        alert.informativeText = "SuperSay \(currentVersion) is the latest version."
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
+            } catch {
+                print("❌ Update check failed: \(error)")
+            }
+        }
+    }
+}
+
+struct GitHubRelease: Codable {
+    let tag_name: String
+    let html_url: String
 }

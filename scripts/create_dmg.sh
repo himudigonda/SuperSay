@@ -28,6 +28,8 @@ xcodebuild -project "${XCODE_PROJECT_DIR}/SuperSay.xcodeproj" \
     -configuration Release \
     -derivedDataPath "${BUILD_DIR}/DerivedData" \
     -archivePath "${BUILD_DIR}/${APP_NAME}.xcarchive" \
+    MARKETING_VERSION="${VERSION}" \
+    CURRENT_PROJECT_VERSION="1" \
     archive \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \

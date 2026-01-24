@@ -204,6 +204,24 @@ struct PreferencesView: View {
                         .help("We collect: App Launches, Character Counts, and Export Counts. No text content or personal data is ever recorded or transmitted.")
                         
                         Divider()
+
+                        HStack {
+                            Button {
+                                vm.checkForUpdates()
+                            } label: {
+                                Label("Check for Updates...", systemImage: "arrow.triangle.2.circlepath")
+                                    .font(vm.appFont(size: 13, weight: .medium))
+                            }
+                            .buttonStyle(.plain)
+                            
+                            Spacer()
+                            
+                            Text("v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"))
+                                .font(vm.appFont(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Divider()
                         
                         Button {
                             audio.exportToDesktop()
