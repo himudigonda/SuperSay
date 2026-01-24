@@ -7,8 +7,26 @@ import soundfile as sf
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
-from kokoro_onnx import Kokoro
 from pydantic import BaseModel
+
+# --- Configure Espeak BEFORE importing Kokoro ---
+try:
+    import espeakng_loader
+    import phonemizer
+
+    # Force phonemizer to use the bundled library
+    # This is critical for the PyInstaller bundle to work without system espeak
+    espeak_lib_path = espeakng_loader.get_library_path()
+    if espeak_lib_path:
+        os.environ["PHONEMIZER_ESPEAK_LIBRARY"] = espeak_lib_path
+        print(f"🔧 Configured espeak library at: {espeak_lib_path}")
+    else:
+        print("⚠️ espeakng_loader found but no library path returned")
+
+except ImportError as e:
+    print(f"⚠️ Could not setup espeakng_loader: {e}")
+
+from kokoro_onnx import Kokoro
 
 app = FastAPI(title="SuperSay TTS Production Backend")
 
