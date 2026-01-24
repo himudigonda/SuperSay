@@ -15,6 +15,7 @@ class AudioEngine: NSObject, ObservableObject, AVAudioPlayerDelegate {
     func play(data: Data, volume: Float = 1.0) throws {
         print("🎧 AudioEngine: play called with \(data.count) bytes")
         stop()
+        player = nil // Force release of old player instance
         
         do {
             // Explicitly hint WAV to avoid "unknown file type" error

@@ -90,6 +90,9 @@ class SuperSayStore: ObservableObject {
         
         speechTask?.cancel()
         
+        // Safety: Stop any existing audio immediately to prevent overlaps
+        audio.stop()
+        
         speechTask = Task {
             let input = text ?? SelectionManager.getSelectedText()
             guard let raw = input, !raw.isEmpty else { return }
