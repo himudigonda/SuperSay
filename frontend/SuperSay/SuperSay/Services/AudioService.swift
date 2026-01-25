@@ -28,6 +28,9 @@ class AudioService: NSObject, ObservableObject {
     private var pcmAccumulator = Data()
     private var hasStartedPlayback = false
     
+    // New: Handle manual duration estimation
+    private var estimatedDuration: TimeInterval = 1.0
+    
     override init() {
         super.init()
         setupEngine()
@@ -36,7 +39,6 @@ class AudioService: NSObject, ObservableObject {
     private func setupEngine() {
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
-        
         do {
             try engine.start()
         } catch {
@@ -44,79 +46,139 @@ class AudioService: NSObject, ObservableObject {
         }
     }
     
+    // Called by ViewModel BEFORE streaming starts
+    func setEstimatedDuration(textLength: Int, speed: Double) {
+        // Avg reading speed: ~15 chars per second.
+        let rawSeconds = Double(textLength) / 15.0
+        self.estimatedDuration = max(1.0, rawSeconds / speed)
+        self.duration = self.estimatedDuration
+        print("⏱️ AudioService: Estimated duration set to \(self.duration)s")
+    }
+    
     func playChunk(_ data: Data, volume: Float) {
         var dataToProcess = data
         
-        // 1. Robust Header Stripping
+        // 1. Header Stripping
         if !hasStrippedHeader {
             headerAccumulator.append(dataToProcess)
             if headerAccumulator.count >= 44 {
-                // We have the full header, discard it and keep the rest
                 dataToProcess = headerAccumulator.advanced(by: 44)
                 hasStrippedHeader = true
-                headerAccumulator = Data() // Clear
+                headerAccumulator = Data()
             } else {
-                // Still waiting for more header bytes
                 return
             }
         }
         
-        // 2. Data Alignment (Ensure multiples of 2 bytes for 16-bit PCM)
+        // 2. Data Alignment
         pcmAccumulator.append(dataToProcess)
         let bytesToProcess = (pcmAccumulator.count / 2) * 2
-        
         guard bytesToProcess > 0 else { return }
         
         let chunkToBuffer = pcmAccumulator.prefix(bytesToProcess)
         pcmAccumulator.removeFirst(bytesToProcess)
         
+        // Append to our history
         lastAudioData.append(chunkToBuffer)
         
-        // 3. Convert to Buffer
-        guard let buffer = dataToBuffer(chunkToBuffer) else { return }
+        // Calculate actual duration based on data received so far
+        let actualDuration = TimeInterval(lastAudioData.count / 2) / 24000.0
         
-        playerNode.volume = volume
-        playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
-        
-        // 4. Playback Logic with Mini-Buffering
-        // We wait for at least 0.1s (4800 bytes) of audio before starting the node
-        // to prevent jitter and running the buffer dry immediately.
-        if !hasStartedPlayback && lastAudioData.count > 4800 {
-            do {
-                if !engine.isRunning { try engine.start() }
-                playerNode.play()
-                isPlaying = true
-                hasStartedPlayback = true
-                startTime = Date()
-                startTimer()
-                print("▶️ AudioService: Playback started (Buffered \(lastAudioData.count) bytes)")
-            } catch {
-                print("❌ AudioService: Failed to start playback engine: \(error)")
-            }
+        // Update duration: Use estimate until actual data surpasses it (prevents slider jumping back)
+        if actualDuration > self.estimatedDuration {
+            self.duration = actualDuration
         }
         
-        // Update duration estimate
-        let totalSamples = lastAudioData.count / 2
-        self.duration = TimeInterval(totalSamples) / 24000.0
+        // 3. Convert & Play
+        // Only schedule if we aren't currently dragging/seeking, otherwise we interrupt the seek logic
+        if !isDragging {
+            guard let buffer = dataToBuffer(chunkToBuffer) else { return }
+            playerNode.volume = volume
+            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            
+            if !hasStartedPlayback && lastAudioData.count > 4800 {
+                startPlayback()
+            }
+        }
     }
     
-    @MainActor // Added @MainActor to togglePause
+    // Added to support multiple segments in one stream
+    func prepareForNextSentence() {
+        hasStrippedHeader = false
+        headerAccumulator = Data()
+        pcmAccumulator = Data()
+    }
+    
+    private func startPlayback() {
+        do {
+            if !engine.isRunning { try engine.start() }
+            playerNode.play()
+            isPlaying = true
+            hasStartedPlayback = true
+            startTime = Date()
+            startTimer()
+        } catch {
+            print("❌ AudioService: Start error: \(error)")
+        }
+    }
+    
+    func seek(to percentage: Double) {
+        guard !lastAudioData.isEmpty else { return }
+        
+        // 1. Stop current playback to clear queue
+        playerNode.stop()
+        
+        // 2. Calculate byte offset (must be even for 16-bit PCM)
+        let targetTime = percentage * duration
+        let targetSample = Int(targetTime * 24000)
+        var targetByte = targetSample * 2
+        
+        // Clamp
+        if targetByte >= lastAudioData.count { targetByte = lastAudioData.count - 2 }
+        if targetByte < 0 { targetByte = 0 }
+        
+        // Ensure even alignment
+        if targetByte % 2 != 0 { targetByte -= 1 }
+        
+        print("⏩ AudioService: Seeking to \(String(format: "%.1f", targetTime))s (Byte \(targetByte)/\(lastAudioData.count))")
+        
+        // 3. Create buffer from History[offset...]
+        let remainingData = lastAudioData.advanced(by: targetByte)
+        
+        if let buffer = dataToBuffer(remainingData) {
+            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            
+            // 4. Update Time State
+            // We adjust startTime so the timer calculation (Date() - startTime) results in the new Seek Time
+            let now = Date()
+            self.pausedTime = targetTime // Reset accumulation
+            self.startTime = now // Reset anchor
+            self.currentTime = targetTime
+            
+            if !engine.isRunning { try? engine.start() }
+            playerNode.play()
+            isPlaying = true
+            startTimer()
+        }
+    }
+    
+    @MainActor
     func togglePause() {
         if playerNode.isPlaying {
             playerNode.pause()
             engine.pause()
-            pausedTime += Date().timeIntervalSince(startTime ?? Date())
+            // Snapshot the time elapsed so far
+            if let start = startTime {
+                pausedTime += Date().timeIntervalSince(start)
+            }
             isPlaying = false
         } else {
-            do {
-                try engine.start()
-                playerNode.play()
-                startTime = Date()
-                isPlaying = true
-                startTimer()
-            } catch {
-                print("❌ AudioService: Resume error: \(error)")
-            }
+            try? engine.start()
+            playerNode.play()
+            // Reset anchor to now
+            startTime = Date()
+            isPlaying = true
+            startTimer()
         }
     }
     
@@ -134,6 +196,8 @@ class AudioService: NSObject, ObservableObject {
         pcmAccumulator = Data()
         hasStartedPlayback = false
         headerAccumulator = Data()
+        estimatedDuration = 1.0
+        duration = 0 // Reset duration
     }
     
     func prepareForStream() {
@@ -149,12 +213,6 @@ class AudioService: NSObject, ObservableObject {
         stop()
     }
     
-    func seek(to percentage: Double) {
-        // Seeking in a live buffer stream is complex. 
-        // For now, we only support stopping/restarting.
-        print("⚠️ AudioService: Seek not yet implemented for streaming engine.")
-    }
-    
     private func startTimer() {
         timer?.cancel()
         timer = Timer.publish(every: 0.1, on: .main, in: .common)
@@ -162,16 +220,21 @@ class AudioService: NSObject, ObservableObject {
             .sink { [weak self] _ in
                 guard let self = self, self.isPlaying else { return }
                 
-                let elapsedSinceStart = Date().timeIntervalSince(self.startTime ?? Date())
-                self.currentTime = self.pausedTime + elapsedSinceStart
+                // If streaming, current time is derived from (PausedAccumulation + (Now - LastStart))
+                let elapsedSinceResume = Date().timeIntervalSince(self.startTime ?? Date())
+                self.currentTime = self.pausedTime + elapsedSinceResume
                 
                 if !self.isDragging {
                     self.progress = self.duration > 0 ? self.currentTime / self.duration : 0
                 }
                 
-                // If we've played past the estimated duration (plus buffer), assume finished
+                // Auto-stop if we reached the end of KNOWN data and stream is done
                 if !self.isStreamActive && self.currentTime >= self.duration + 0.1 {
-                    self.stop()
+                    // Only stop if we really are at the end of the buffer
+                    // (Simple heuristic: check if progress is near 1.0)
+                    if self.progress >= 0.99 {
+                        self.stop()
+                    }
                 }
             }
     }

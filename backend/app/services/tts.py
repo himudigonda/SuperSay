@@ -1,7 +1,7 @@
 import re
 
 # NEW: Import for typing the generator
-from typing import Generator
+from typing import AsyncGenerator, Generator
 
 import numpy as np
 from app.core.config import settings
@@ -27,35 +27,65 @@ class TTSEngine:
 
     @classmethod
     # CHANGE: Return type is now an async generator
-    async def generate(cls, text: str, voice: str, speed: float):
+    async def generate(
+        cls, text: str, voice: str, speed: float
+    ) -> AsyncGenerator[np.ndarray, None]:
         if not cls._model:
             raise RuntimeError("Model not initialized. Call initialize() first.")
 
+        import asyncio
+
         import anyio
 
-        # 1. Clean & Split Text
+        # 1. Clean & Split Text granularly for manual pauses
         raw_text = text.replace("\n", " ").strip()
-        sentences = re.split(r"(?<=[.!?])\s+", raw_text)
-        sentences = [s for s in sentences if len(s.strip()) > 0]
+        segments = [
+            s for s in re.split(r"(?<=[,.!?;:])(?![,.!?;:])\s*", raw_text) if s.strip()
+        ]
 
-        if not sentences:
-            sentences = [raw_text]
+        if not segments:
+            segments = [raw_text]
 
-        silence = AudioService.generate_silence(0.2)
-        is_first_chunk = True
+        pause_map = {
+            ".": 0.8,
+            "!": 0.8,
+            "?": 0.8,
+            ",": 0.4,
+            ":": 0.6,
+            ";": 0.6,
+        }
 
-        # 2. Inference Loop: Now async
-        for sentence in sentences:
-            # Run blocking inference in a thread to allow other requests to proceed
+        # 2. Advanced Parallel Inference with Sequential Yielding
+        # We wrap each segment in a task so they all start generating immediately.
+        # But we 'await' them in order to ensure the speech flow is correct.
+
+        async def generate_segment(seg: str):
             audio, _ = await anyio.to_thread.run_sync(
                 lambda: cls._model.create(
-                    sentence, voice=voice, speed=speed, lang="en-us"
+                    seg.strip(), voice=voice, speed=speed, lang="en-us"
                 )
             )
+            return audio
+
+        # Fire off all inferences in parallel
+        tasks = [generate_segment(s) for s in segments]
+
+        # 3. Consumption Loop (Maintains Order)
+        for i, segment_text in enumerate(segments):
+            audio = await tasks[i]
 
             if audio is not None:
-                if not is_first_chunk:
-                    yield silence
-
+                audio = AudioService.apply_fade(audio)
                 yield audio
-                is_first_chunk = False
+
+                # Manual gaps based on punctuation type
+                stripped = segment_text.rstrip()
+                last_char = stripped[-1] if stripped else ""
+
+                if stripped.endswith("..."):
+                    silence_sec = 1.0
+                else:
+                    silence_sec = pause_map.get(last_char, 0.2)
+
+                if silence_sec > 0:
+                    yield AudioService.generate_silence(silence_sec)

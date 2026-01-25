@@ -30,6 +30,35 @@ class AudioService:
         return buffer.getvalue()
 
     @staticmethod
+    def apply_fade(
+        samples: np.ndarray, duration_sec: float = 0.05, sample_rate: int = 24000
+    ) -> np.ndarray:
+        """
+        Applies a linear fade-in and fade-out to the audio samples to prevent popping
+        at sentence boundaries.
+        """
+        if len(samples) == 0:
+            return samples
+
+        fade_samples = int(duration_sec * sample_rate)
+
+        # If the audio is shorter than 2x fade, just fade the whole thing to center
+        if len(samples) < 2 * fade_samples:
+            fade_samples = len(samples) // 2
+
+        # Create fade curves (0.0 to 1.0)
+        fade_in = np.linspace(0.0, 1.0, fade_samples).astype(np.float32)
+        fade_out = np.linspace(1.0, 0.0, fade_samples).astype(np.float32)
+
+        # Apply Fade In
+        samples[:fade_samples] *= fade_in
+
+        # Apply Fade Out
+        samples[-fade_samples:] *= fade_out
+
+        return samples
+
+    @staticmethod
     def generate_silence(
         duration_sec: float = 0.2, sample_rate: int = 24000
     ) -> np.ndarray:

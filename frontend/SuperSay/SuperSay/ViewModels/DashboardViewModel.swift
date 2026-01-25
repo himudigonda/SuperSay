@@ -120,42 +120,25 @@ class DashboardViewModel: ObservableObject {
     func speak(text: String) async {
         status = .thinking
         
-        // 1. Pre-processing & Splitting
         let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
-        let sentences = splitIntoSentences(cleaned)
+        audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
         
-        print("🎙️ DashboardViewModel: Parallelizing \(sentences.count) sentences...")
+        print("🎙️ DashboardViewModel: Sending full text stream...")
         audio.prepareForStream()
         
-        // 2. Start parallel requests for each sentence
-        // We'll process them in windows (max 5 at a time) to avoid overwhelming the backend
-        let windowSize = 5
-        for i in stride(from: 0, to: sentences.count, by: windowSize) {
-            let end = min(i + windowSize, sentences.count)
-            let window = sentences[i..<end]
+        let stream = backend.streamAudio(
+            text: cleaned,
+            voice: selectedVoice,
+            speed: speechSpeed,
+            volume: speechVolume
+        )
             
-            // Start all streams in this window
-            var streams: [AsyncStream<Data>] = []
-            for sentence in window {
-                let stream = await backend.streamAudio(
-                    text: String(sentence),
-                    voice: selectedVoice,
-                    speed: speechSpeed,
-                    volume: speechVolume
-                )
-                streams.append(stream)
+        // 3. Playback Loop
+        for await chunk in stream {
+            if status == .thinking {
+                status = .speaking
             }
-            
-            // Sequential playback of parallel-fetched streams
-            for (idx, stream) in streams.enumerated() {
-                for await chunk in stream {
-                    if status == .thinking {
-                        status = .speaking
-                    }
-                    audio.playChunk(chunk, volume: Float(speechVolume))
-                }
-                print("✅ DashboardViewModel: Finished sentence \(i + idx + 1)/\(sentences.count)")
-            }
+            audio.playChunk(chunk, volume: Float(speechVolume))
         }
         
         audio.finishStream()
@@ -194,7 +177,7 @@ class DashboardViewModel: ObservableObject {
                          // We let BackendService's isLaunching state dictate this implicitly, 
                          // but for now, if offline, we assume initializing loop
                          Task {
-                             let launching = await self.backend.isLaunching
+                             let launching = self.backend.isLaunching
                              DispatchQueue.main.async {
                                  self.isBackendInitializing = launching
                              }

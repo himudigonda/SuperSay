@@ -1,17 +1,28 @@
 import Foundation
 import Combine
 
-actor BackendService: NSObject, URLSessionDataDelegate {
+final class BackendService: NSObject {
     private var process: Process?
-    public var isLaunching = false
+    private(set) var isLaunching = false
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
     
-    // Streaming state
+    // Thread-safe state
+    private let lock = NSRecursiveLock()
     private var continuations: [Int: AsyncStream<Data>.Continuation] = [:]
+    
+    // Shared session for streaming
+    private lazy var session: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.httpMaximumConnectionsPerHost = 10
+        return URLSession(configuration: config, delegate: self, delegateQueue: nil)
+    }()
     
     // MARK: - Process Management
     
     func start() {
+        lock.lock()
+        defer { lock.unlock() }
+        
         guard process == nil && !isLaunching else { return }
         isLaunching = true
         
@@ -21,11 +32,9 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         
         if !FileManager.default.fileExists(atPath: executableURL.path) {
             print("📦 BackendService: Installing backend engine...")
-            self.log(message: "📦 Installing backend engine...")
             
             guard let zipURL = Bundle.main.url(forResource: "SuperSayServer", withExtension: "zip") else {
                 print("❌ Backend ZIP not found in Bundle!")
-                self.log(message: "❌ Backend ZIP not found")
                 isLaunching = false
                 return
             }
@@ -36,10 +45,8 @@ actor BackendService: NSObject, URLSessionDataDelegate {
                 unzipProcess.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
                 try unzipProcess.run()
                 unzipProcess.waitUntilExit()
-                print("✅ Backend installed to: \(backendFolder.path)")
             } catch {
                 print("❌ Failed to unzip backend: \(error)")
-                self.log(message: "❌ Failed to unzip backend: \(error)")
                 isLaunching = false
                 return
             }
@@ -67,15 +74,17 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
         
-        try? "".write(to: logURL, atomically: true, encoding: .utf8)
+        _ = try? "".write(to: logURL, atomically: true, encoding: .utf8)
         
         pipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             if data.isEmpty { return }
             if let str = String(data: data, encoding: .utf8) {
-                try? FileHandle(forWritingTo: logURL).seekToEndOfFile()
-                try? FileHandle(forWritingTo: logURL).write(contentsOf: data)
-                try? FileHandle(forWritingTo: logURL).closeFile()
+                if let logHandle = try? FileHandle(forWritingTo: logURL) {
+                    logHandle.seekToEndOfFile()
+                    logHandle.write(data)
+                    logHandle.closeFile()
+                }
                 print("[BACKEND] \(str)")
             }
         }
@@ -85,27 +94,25 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             process = p
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
             
-            Task {
-                try? await Task.sleep(nanoseconds: 3 * 1_000_000_000)
-                isLaunching = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.lock.lock()
+                self.isLaunching = false
+                self.lock.unlock()
             }
         } catch {
             print("❌ Failed to launch backend: \(error)")
-            self.log(message: "❌ Failed to launch backend: \(error)")
             isLaunching = false
         }
     }
     
-    private func log(message: String) {
+    func log(message: String) {
         let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
         let entry = "\(Date()): \(message)\n"
         if let data = entry.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logURL.path) {
-                if let handle = try? FileHandle(forWritingTo: logURL) {
-                    handle.seekToEndOfFile()
-                    handle.write(data)
-                    handle.closeFile()
-                }
+            if let handle = try? FileHandle(forWritingTo: logURL) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                handle.closeFile()
             } else {
                 try? data.write(to: logURL)
             }
@@ -113,6 +120,8 @@ actor BackendService: NSObject, URLSessionDataDelegate {
     }
     
     func stop() {
+        lock.lock()
+        defer { lock.unlock() }
         process?.terminate()
         process = nil
         
@@ -145,17 +154,13 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             
-            if statusCode == 503 {
-                print("📡 Backend: Still loading models...")
-                return false
+            if statusCode == 200 {
+                lock.lock()
+                isLaunching = false
+                lock.unlock()
+                return true
             }
-            
-            let isOnline = statusCode == 200
-            if isOnline && isLaunching { 
-                print("📡 Backend is now Online")
-                isLaunching = false 
-            }
-            return isOnline
+            return false
         } catch {
             return false
         }
@@ -169,7 +174,7 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.timeoutInterval = 60
+            request.timeoutInterval = 120
             
             let payload: [String: Any] = [
                 "text": text,
@@ -181,57 +186,44 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: payload)
                 
-                let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
                 let task = session.dataTask(with: request)
+                let id = task.taskIdentifier
                 
-                let id = Int.random(in: 1...Int.max)
-                task.taskDescription = "\(id)"
-                self.continuations[id] = continuation
+                lock.lock()
+                continuations[id] = continuation
+                lock.unlock()
                 
                 task.resume()
                 
                 continuation.onTermination = { @Sendable _ in
                     task.cancel()
-                    Task { [id] in
-                        await self.removeContinuation(id: id)
-                    }
+                    self.lock.lock()
+                    self.continuations.removeValue(forKey: id)
+                    self.lock.unlock()
                 }
             } catch {
-                print("❌ BackendService: Failed to create request: \(error)")
                 continuation.finish()
             }
         }
     }
-    
-    private func removeContinuation(id: Int) {
-        continuations.removeValue(forKey: id)
+}
+
+extension BackendService: URLSessionDataDelegate {
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        let id = dataTask.taskIdentifier
+        lock.lock()
+        let continuation = continuations[id]
+        lock.unlock()
+        
+        continuation?.yield(data)
     }
     
-    // MARK: - URLSessionDataDelegate
-    
-    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
-        guard let idString = dataTask.taskDescription, let id = Int(idString) else { return }
-        Task {
-            await self.yieldData(id: id, data: data)
-        }
-    }
-    
-    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let idString = task.taskDescription, let id = Int(idString) else { return }
-        Task {
-            if let error = error {
-                print("❌ BackendService: Stream \(id) error: \(error.localizedDescription)")
-            }
-            await self.finishContinuation(id: id)
-        }
-    }
-    
-    private func yieldData(id: Int, data: Data) {
-        continuations[id]?.yield(data)
-    }
-    
-    private func finishContinuation(id: Int) {
-        continuations[id]?.finish()
-        continuations.removeValue(forKey: id)
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        let id = task.taskIdentifier
+        lock.lock()
+        let continuation = continuations.removeValue(forKey: id)
+        lock.unlock()
+        
+        continuation?.finish()
     }
 }
