@@ -23,9 +23,6 @@ struct TextProcessor {
             result = result.replacingOccurrences(of: "f f", with: "ff")
             result = result.replacingOccurrences(of: "n t", with: "nt")
             result = result.replacingOccurrences(of: "f j", with: "fj")
-            // More common OCR spacing issues
-            result = result.replacingOccurrences(of: "T h", with: "Th")
-            result = result.replacingOccurrences(of: "t h", with: "th")
         }
         
         if options.academicClean {

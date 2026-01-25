@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 import numpy as np
+import pytest
 from app.main import app
 from app.services.audio import AudioService
 from app.services.tts import TTSEngine
@@ -9,8 +10,8 @@ from fastapi.testclient import TestClient
 client = TestClient(app)
 
 
-# Helper to mock the generator
-def mock_tts_generator(*args, **kwargs):
+# Helper to mock the generator - MUST BE ASYNC NOW
+async def mock_tts_generator(*args, **kwargs):
     # Yield small chunks to simulate stream
     yield np.zeros(12000, dtype=np.float32)
     yield AudioService.generate_silence(0.2)

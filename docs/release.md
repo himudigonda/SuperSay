@@ -13,7 +13,7 @@ Update the `version` field in `backend/pyproject.toml`:
 ```toml
 [project]
 name = "backend"
-version = "1.0.3" # Update this
+version = "1.0.5" # Update this
 ```
 
 ### Frontend (Xcode)
@@ -35,10 +35,10 @@ git checkout main
 git pull origin main
 
 # Create an annotated tag
-git tag -a v1.0.3 -m "Release v1.0.3: Zero Latency Streaming"
+git tag -a v1.0.5 -m "Release v1.0.5: Zero Latency Streaming"
 
 # Push the tag to GitHub
-git push origin v1.0.3
+git push origin v1.0.5
 ```
 
 ## 3. Building and Packaging
@@ -47,18 +47,18 @@ git push origin v1.0.3
  
  ```bash
  # This builds backend, frontend, injects fonts, and packages the DMG
- make release VERSION=1.0.3
+ make release VERSION=1.0.5
  ```
  
- The output will be: `build/SuperSay-1.0.3.dmg`
+ The output will be: `build/SuperSay-1.0.5.dmg`
 
 ## 5. Creating GitHub Release
 
 Use the GitHub CLI (`gh`) to finalize the update:
 
 ```bash
-gh release create v1.0.3 build/SuperSay-1.0.3.dmg \
-    --title "SuperSay v1.0.3 - Zero Latency Streaming" \
+gh release create v1.0.5 build/SuperSay-1.0.5.dmg \
+    --title "SuperSay v1.0.5 - Zero Latency Streaming" \
     --notes "This update introduces real-time audio streaming, significantly reducing time-to-speech."
 ```
 

@@ -16,38 +16,41 @@ def mock_kokoro():
     return MockKokoro()
 
 
-def test_tts_engine_sentence_splitting():
+@pytest.mark.asyncio
+async def test_tts_engine_sentence_splitting():
     # We want to test that the sentence splitting logic works
-    # TTSEngine.generate is a generator
     with patch.object(TTSEngine, "_model", MockKokoro()):
         text = "Hello world. This is a test! Does it work?"
-        # We don't want to actually run the model, just check the loop
-        # But create is called per sentence.
 
-        # We can't easily count create calls without a mock on the instance
         mock_model = MagicMock()
         mock_model.create.return_value = (np.ones(100), None)
         TTSEngine._model = mock_model
 
         gen = TTSEngine.generate(text, "af_bella", 1.0)
-        chunks = list(gen)
+        chunks = []
+        async for chunk in gen:
+            chunks.append(chunk)
 
         # "Hello world." "This is a test!" "Does it work?"
-        # plus 2 silences between them
-        # Total chunks = 3 audio + 2 silence = 5
-        assert len(chunks) == 5
+        # Each yields audio + a trailing silence
+        # Total chunks = 3 audio + 3 silence = 6
+        assert len(chunks) == 6
         assert mock_model.create.call_count == 3
 
 
-def test_tts_engine_empty_text():
+@pytest.mark.asyncio
+async def test_tts_engine_empty_text():
     with patch.object(TTSEngine, "_model", MockKokoro()):
         gen = TTSEngine.generate("", "af_bella", 1.0)
-        chunks = list(gen)
-        # Should yield 1 audio chunk (empty or whatever the model returns)
-        assert len(chunks) == 1
+        chunks = []
+        async for chunk in gen:
+            chunks.append(chunk)
+        # Yields 1 audio chunk + 1 trailing silence
+        assert len(chunks) == 2
 
 
-def test_tts_engine_newlines():
+@pytest.mark.asyncio
+async def test_tts_engine_newlines():
     with patch.object(TTSEngine, "_model", MockKokoro()):
         text = "Line one\nLine two"
         mock_model = MagicMock()
@@ -55,7 +58,8 @@ def test_tts_engine_newlines():
         TTSEngine._model = mock_model
 
         gen = TTSEngine.generate(text, "af_bella", 1.0)
-        list(gen)
+        async for _ in gen:
+            pass
 
         # Newlines are replaced by space, so it should be one sentence if no punctuation
         assert mock_model.create.call_count == 1
@@ -63,8 +67,10 @@ def test_tts_engine_newlines():
         assert "Line one Line two" in call_args[0]
 
 
-def test_tts_engine_not_initialized():
+@pytest.mark.asyncio
+async def test_tts_engine_not_initialized():
     TTSEngine._model = None
     with pytest.raises(RuntimeError, match="Model not initialized"):
         gen = TTSEngine.generate("test", "af_bella", 1.0)
-        next(gen)
+        async for _ in gen:
+            pass
