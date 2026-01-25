@@ -21,14 +21,10 @@ class SpeakRequest(BaseModel):
 def health_check():
     """
     Swift polls this to know when the backend is ready.
-    Ideally, we check if the model is actually loaded.
     """
-    try:
-        # Simple heuristic: if the class exists, we are good.
-        # Could add a lightweight inference check here if needed.
-        return {"status": "ok", "model": "loaded"}
-    except Exception:
+    if TTSEngine._model is None:
         raise HTTPException(status_code=503, detail="Initializing")
+    return {"status": "ok", "model": "loaded"}
 
 
 @router.post("/speak")
@@ -37,6 +33,10 @@ async def speak(req: SpeakRequest):
         print(
             f"[API] 🎙️ Received streaming speak request: {len(req.text)} chars, voice={req.voice}, speed={req.speed}"
         )
+
+        # Check if model is initialized early to catch errors before streaming
+        if TTSEngine._model is None:
+            raise RuntimeError("Model not initialized")
 
         # TTSEngine.generate is now a generator of raw numpy audio samples
         raw_samples_generator = TTSEngine.generate(req.text, req.voice, req.speed)

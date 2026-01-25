@@ -12,8 +12,11 @@ struct TextProcessor {
         var result = text
         
         if options.fixLigatures {
-            let map = ["f i": "fi", "f l": "fl", "f f": "ff", "n t": "nt"]
-            for (k, v) in map { result = result.replacingOccurrences(of: k, with: v) }
+            result = result.replacingOccurrences(of: "f i", with: "fi")
+            result = result.replacingOccurrences(of: "f l", with: "fl")
+            result = result.replacingOccurrences(of: "f f", with: "ff")
+            result = result.replacingOccurrences(of: "n t", with: "nt")
+            result = result.replacingOccurrences(of: "f j", with: "fj")
         }
         
         if options.cleanURLs {
@@ -26,20 +29,30 @@ struct TextProcessor {
         }
         
         if options.expandAbbr {
-            let abbr = ["e.g.": "for example", "i.e.": "that is", "etc.": "etcetera"]
-            for (k, v) in abbr { result = result.replacingOccurrences(of: k, with: v) }
+            let abbr = [
+                "e.g.": "for example",
+                "i.e.": "that is",
+                "etc.": "etcetera",
+                "vs.": "versus",
+                "st.": "street",
+                "apt.": "apartment"
+            ]
+            for (k, v) in abbr {
+                result = result.replacingOccurrences(of: k, with: v, options: .caseInsensitive)
+            }
         }
         
         // Final purification: Remove placeholders and purely symbolic noise
         let symbols = ["\u{FFFC}", "￼", "•", "●", "▪", "◦", "‣", "⁃"]
         for s in symbols { result = result.replacingOccurrences(of: s, with: "") }
         
-        return result.components(separatedBy: .newlines)
+        let cleaned = result.components(separatedBy: .newlines)
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { line in
-                // Only keep lines that contain at least one letter or number
-                line.rangeOfCharacter(from: .alphanumerics) != nil
-            }
+            .filter { !$0.isEmpty }
             .joined(separator: " ")
+            
+        // Reduce multiple spaces to single space
+        return cleaned.replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
