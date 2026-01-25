@@ -118,12 +118,14 @@ class DashboardViewModel: ObservableObject {
     }
     
     func speak(text: String) async {
+        print("DEBUG [DashboardVM] speak() called with text: \"\(text)\"")
         status = .thinking
         
         let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
+        print("DEBUG [DashboardVM] Sanitized text: \"\(cleaned)\"")
         audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
         
-        print("🎙️ DashboardViewModel: Sending full text stream...")
+        print("DEBUG [DashboardVM] Sending full text stream...")
         audio.prepareForStream()
         
         let stream = backend.streamAudio(
@@ -134,12 +136,16 @@ class DashboardViewModel: ObservableObject {
         )
             
         // 3. Playback Loop
+        print("DEBUG [DashboardVM] Starting chunk consumption loop...")
+        var totalChunks = 0
         for await chunk in stream {
+            totalChunks += 1
             if status == .thinking {
                 status = .speaking
             }
             audio.playChunk(chunk, volume: Float(speechVolume))
         }
+        print("DEBUG [DashboardVM] Loop finished. Received \(totalChunks) chunks.")
         
         audio.finishStream()
         print("🎬 DashboardViewModel: Total stream finished")

@@ -28,8 +28,12 @@ class AudioService: NSObject, ObservableObject {
     private var pcmAccumulator = Data()
     private var hasStartedPlayback = false
     
-    // New: Handle manual duration estimation
-    private var estimatedDuration: TimeInterval = 1.0
+    // CRITICAL: Robust Completion Tracking
+    private var scheduledBufferCount = 0
+    
+    // Durations
+    private var estimatedDuration: TimeInterval = 0
+    private var actualDataDuration: TimeInterval = 0
     
     override init() {
         super.init()
@@ -46,19 +50,15 @@ class AudioService: NSObject, ObservableObject {
         }
     }
     
-    // Called by ViewModel BEFORE streaming starts
     func setEstimatedDuration(textLength: Int, speed: Double) {
-        // Avg reading speed: ~15 chars per second.
-        let rawSeconds = Double(textLength) / 15.0
+        let rawSeconds = Double(textLength) / 12.0
         self.estimatedDuration = max(1.0, rawSeconds / speed)
         self.duration = self.estimatedDuration
-        print("⏱️ AudioService: Estimated duration set to \(self.duration)s")
     }
     
     func playChunk(_ data: Data, volume: Float) {
         var dataToProcess = data
         
-        // 1. Header Stripping
         if !hasStrippedHeader {
             headerAccumulator.append(dataToProcess)
             if headerAccumulator.count >= 44 {
@@ -70,46 +70,43 @@ class AudioService: NSObject, ObservableObject {
             }
         }
         
-        // 2. Data Alignment
         pcmAccumulator.append(dataToProcess)
         let bytesToProcess = (pcmAccumulator.count / 2) * 2
         guard bytesToProcess > 0 else { return }
         
         let chunkToBuffer = pcmAccumulator.prefix(bytesToProcess)
         pcmAccumulator.removeFirst(bytesToProcess)
-        
-        // Append to our history
         lastAudioData.append(chunkToBuffer)
         
-        // Calculate actual duration based on data received so far
-        let actualDuration = TimeInterval(lastAudioData.count / 2) / 24000.0
+        self.actualDataDuration = Double(lastAudioData.count / 2) / 24000.0
+        self.duration = max(self.estimatedDuration, self.actualDataDuration)
         
-        // Update duration: Use estimate until actual data surpasses it (prevents slider jumping back)
-        if actualDuration > self.estimatedDuration {
-            self.duration = actualDuration
-        }
-        
-        // 3. Convert & Play
-        // Only schedule if we aren't currently dragging/seeking, otherwise we interrupt the seek logic
         if !isDragging {
             guard let buffer = dataToBuffer(chunkToBuffer) else { return }
             playerNode.volume = volume
-            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
             
-            if !hasStartedPlayback && lastAudioData.count > 4800 {
+            // TRACK SCHEDULED BUFFERS
+            self.scheduledBufferCount += 1
+            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self = self else { return }
+                    self.scheduledBufferCount -= 1
+                    // Only check for stop if the stream is totally finished
+                    if !self.isStreamActive && self.scheduledBufferCount == 0 && self.isPlaying {
+                         print("🎬 AudioService: All scheduled buffers finished. Stopping.")
+                         self.stop()
+                    }
+                }
+            })
+            
+            if !hasStartedPlayback && lastAudioData.count > 4800 { // Increased buffer to 200ms for safety
                 startPlayback()
             }
         }
     }
     
-    // Added to support multiple segments in one stream
-    func prepareForNextSentence() {
-        hasStrippedHeader = false
-        headerAccumulator = Data()
-        pcmAccumulator = Data()
-    }
-    
     private func startPlayback() {
+        guard !hasStartedPlayback else { return }
         do {
             if !engine.isRunning { try engine.start() }
             playerNode.play()
@@ -122,37 +119,45 @@ class AudioService: NSObject, ObservableObject {
         }
     }
     
+    private func startTimer() {
+        timer?.cancel()
+        timer = Timer.publish(every: 0.1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self = self, self.isPlaying else { return }
+                let elapsedSinceStart = Date().timeIntervalSince(self.startTime ?? Date())
+                self.currentTime = self.pausedTime + elapsedSinceStart
+                if !self.isDragging {
+                    self.progress = self.duration > 0 ? min(1.0, self.currentTime / self.duration) : 0
+                }
+            }
+    }
+    
     func seek(to percentage: Double) {
         guard !lastAudioData.isEmpty else { return }
-        
-        // 1. Stop current playback to clear queue
         playerNode.stop()
+        self.scheduledBufferCount = 0 // Clear count
         
-        // 2. Calculate byte offset (must be even for 16-bit PCM)
         let targetTime = percentage * duration
         let targetSample = Int(targetTime * 24000)
         var targetByte = targetSample * 2
         
-        // Clamp
         if targetByte >= lastAudioData.count { targetByte = lastAudioData.count - 2 }
         if targetByte < 0 { targetByte = 0 }
-        
-        // Ensure even alignment
         if targetByte % 2 != 0 { targetByte -= 1 }
         
-        print("⏩ AudioService: Seeking to \(String(format: "%.1f", targetTime))s (Byte \(targetByte)/\(lastAudioData.count))")
-        
-        // 3. Create buffer from History[offset...]
         let remainingData = lastAudioData.advanced(by: targetByte)
-        
         if let buffer = dataToBuffer(remainingData) {
-            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: nil)
+            self.scheduledBufferCount += 1
+            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.scheduledBufferCount -= 1
+                }
+            })
             
-            // 4. Update Time State
-            // We adjust startTime so the timer calculation (Date() - startTime) results in the new Seek Time
             let now = Date()
-            self.pausedTime = targetTime // Reset accumulation
-            self.startTime = now // Reset anchor
+            self.pausedTime = targetTime
+            self.startTime = now
             self.currentTime = targetTime
             
             if !engine.isRunning { try? engine.start() }
@@ -162,12 +167,10 @@ class AudioService: NSObject, ObservableObject {
         }
     }
     
-    @MainActor
     func togglePause() {
         if playerNode.isPlaying {
             playerNode.pause()
             engine.pause()
-            // Snapshot the time elapsed so far
             if let start = startTime {
                 pausedTime += Date().timeIntervalSince(start)
             }
@@ -175,10 +178,22 @@ class AudioService: NSObject, ObservableObject {
         } else {
             try? engine.start()
             playerNode.play()
-            // Reset anchor to now
             startTime = Date()
             isPlaying = true
             startTimer()
+        }
+    }
+    
+    func prepareForStream() {
+        stop()
+        isStreamActive = true
+    }
+    
+    func finishStream() {
+        isStreamActive = false
+        // Check if we already finished (sometimes stream closes after playback is done)
+        if scheduledBufferCount == 0 && isPlaying {
+            stop()
         }
     }
     
@@ -196,98 +211,33 @@ class AudioService: NSObject, ObservableObject {
         pcmAccumulator = Data()
         hasStartedPlayback = false
         headerAccumulator = Data()
-        estimatedDuration = 1.0
-        duration = 0 // Reset duration
-    }
-    
-    func prepareForStream() {
-        stop()
-        isStreamActive = true
-    }
-    
-    func finishStream() {
-        isStreamActive = false
-    }
-    
-    func reset() {
-        stop()
-    }
-    
-    private func startTimer() {
-        timer?.cancel()
-        timer = Timer.publish(every: 0.1, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                guard let self = self, self.isPlaying else { return }
-                
-                // If streaming, current time is derived from (PausedAccumulation + (Now - LastStart))
-                let elapsedSinceResume = Date().timeIntervalSince(self.startTime ?? Date())
-                self.currentTime = self.pausedTime + elapsedSinceResume
-                
-                if !self.isDragging {
-                    self.progress = self.duration > 0 ? self.currentTime / self.duration : 0
-                }
-                
-                // Auto-stop if we reached the end of KNOWN data and stream is done
-                if !self.isStreamActive && self.currentTime >= self.duration + 0.1 {
-                    // Only stop if we really are at the end of the buffer
-                    // (Simple heuristic: check if progress is near 1.0)
-                    if self.progress >= 0.99 {
-                        self.stop()
-                    }
-                }
-            }
-    }
-    
-    func exportToDesktop() {
-        guard !lastAudioData.isEmpty else { return }
-        
-        // Re-construct a proper WAV for export
-        let wavData = createWavData(from: lastAudioData)
-        
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
-        let filename = "SuperSay_\(formatter.string(from: Date())).wav"
-        
-        let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0]
-        let fileURL = desktopURL.appendingPathComponent(filename)
-        
-        do {
-            try wavData.write(to: fileURL)
-            showNotification(title: "Export Successful", body: "Saved to Desktop: \(filename)")
-            MetricsService.shared.trackExport()
-        } catch {
-            showNotification(title: "Export Failed", body: error.localizedDescription)
-        }
+        estimatedDuration = 0
+        actualDataDuration = 0
+        duration = 0
+        scheduledBufferCount = 0
     }
     
     private func dataToBuffer(_ data: Data) -> AVAudioPCMBuffer? {
-        let frameCount = UInt32(data.count) / format.streamDescription.pointee.mBytesPerFrame
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
+        let frameCount = UInt32(data.count) / 2 // 16-bit
+        guard frameCount > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
         buffer.frameLength = frameCount
-        
-        data.withUnsafeBytes { (rawBufferPointer: UnsafeRawBufferPointer) in
-            if let baseAddress = rawBufferPointer.baseAddress,
-               let audioBuffer = buffer.int16ChannelData?[0] {
+        data.withUnsafeBytes { rawBufferPointer in
+            if let baseAddress = rawBufferPointer.baseAddress, let audioBuffer = buffer.int16ChannelData?[0] {
                 let dataPointer = baseAddress.assumingMemoryBound(to: Int16.self)
-                for i in 0..<Int(frameCount) {
-                    audioBuffer[i] = dataPointer[i]
-                }
+                for i in 0..<Int(frameCount) { audioBuffer[i] = dataPointer[i] }
             }
         }
         return buffer
     }
-    
-    private func createWavData(from pcmData: Data) -> Data {
+
+    func exportToDesktop() {
+        guard !lastAudioData.isEmpty else { return }
         let headerSize = 44
-        let totalSize = pcmData.count + headerSize - 8
-        let dataSize = pcmData.count
-        
+        let totalSize = lastAudioData.count + headerSize - 8
         var header = Data()
         header.append("RIFF".data(using: .ascii)!)
         header.append(contentsOf: withUnsafeBytes(of: UInt32(totalSize)) { Data($0) })
-        header.append("WAVE".data(using: .ascii)!)
-        header.append("fmt ".data(using: .ascii)!)
+        header.append("WAVEfmt ".data(using: .ascii)!)
         header.append(contentsOf: withUnsafeBytes(of: UInt32(16)) { Data($0) })
         header.append(contentsOf: withUnsafeBytes(of: UInt16(1)) { Data($0) })
         header.append(contentsOf: withUnsafeBytes(of: UInt16(1)) { Data($0) })
@@ -296,17 +246,11 @@ class AudioService: NSObject, ObservableObject {
         header.append(contentsOf: withUnsafeBytes(of: UInt16(2)) { Data($0) })
         header.append(contentsOf: withUnsafeBytes(of: UInt16(16)) { Data($0) })
         header.append("data".data(using: .ascii)!)
-        header.append(contentsOf: withUnsafeBytes(of: UInt32(dataSize)) { Data($0) })
+        header.append(contentsOf: withUnsafeBytes(of: UInt32(lastAudioData.count)) { Data($0) })
         
-        return header + pcmData
-    }
-    
-    private func showNotification(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        let wavData = header + lastAudioData
+        let filename = "SuperSay_\(Int(Date().timeIntervalSince1970)).wav"
+        let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
+        try? wavData.write(to: desktopURL)
     }
 }

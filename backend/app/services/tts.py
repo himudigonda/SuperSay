@@ -39,12 +39,17 @@ class TTSEngine:
 
         # 1. Clean & Split Text granularly for manual pauses
         raw_text = text.replace("\n", " ").strip()
+        # Split after punctuation groups, but NOT inside them (e.g., don't split '...')
         segments = [
             s for s in re.split(r"(?<=[,.!?;:])(?![,.!?;:])\s*", raw_text) if s.strip()
         ]
 
         if not segments:
             segments = [raw_text]
+
+        print(f"[TTS] 🧩 Internal splitting into {len(segments)} segments")
+        for idx, seg in enumerate(segments):
+            print(f'  [{idx}] "{seg}" ({len(seg)} chars)')
 
         pause_map = {
             ".": 0.8,
@@ -56,23 +61,34 @@ class TTSEngine:
         }
 
         # 2. Advanced Parallel Inference with Sequential Yielding
-        # We wrap each segment in a task so they all start generating immediately.
-        # But we 'await' them in order to ensure the speech flow is correct.
-
-        async def generate_segment(seg: str):
-            audio, _ = await anyio.to_thread.run_sync(
-                lambda: cls._model.create(
-                    seg.strip(), voice=voice, speed=speed, lang="en-us"
+        async def generate_segment(seg: str, index: int):
+            try:
+                print(f"[TTS] ⚡️ Starting inference for segment {index}...")
+                audio, _ = await anyio.to_thread.run_sync(
+                    lambda: cls._model.create(
+                        seg.strip(), voice=voice, speed=speed, lang="en-us"
+                    )
                 )
-            )
-            return audio
+                if audio is None:
+                    print(f"[TTS] ⚠️ Segment {index} returned NULL audio")
+                else:
+                    print(f"[TTS] ✅ Segment {index} generated ({len(audio)} samples)")
+                return audio
+            except Exception as e:
+                print(f"[TTS] ❌ Error generating segment {index}: {e}")
+                return None
 
-        # Fire off all inferences in parallel
-        tasks = [generate_segment(s) for s in segments]
+        # Fire off all inferences in parallel using REAL tasks
+        tasks = [
+            asyncio.create_task(generate_segment(s, i)) for i, s in enumerate(segments)
+        ]
 
         # 3. Consumption Loop (Maintains Order)
+        print("DEBUG [TTS] Starting sequential consumption of tasks...")
         for i, segment_text in enumerate(segments):
+            print(f"DEBUG [TTS] Waiting for segment {i} audio...")
             audio = await tasks[i]
+            print(f"DEBUG [TTS] Segment {i} received. Yielding to stream.")
 
             if audio is not None:
                 audio = AudioService.apply_fade(audio)
