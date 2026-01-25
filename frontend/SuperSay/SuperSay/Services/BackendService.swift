@@ -29,13 +29,21 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         let p = Process()
         p.executableURL = url
         
+        // FIX: Force Python to unbuffer output so logs appear immediately
+        var env = ProcessInfo.processInfo.environment
+        env["PYTHONUNBUFFERED"] = "1"
+        p.environment = env
+        
         // redirect to log file
         let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
         if !FileManager.default.fileExists(atPath: logURL.path) {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
+        
+        // Truncate file to start fresh for this session
+        try? "".write(to: logURL, atomically: true, encoding: .utf8)
+        
         let logHandle = try? FileHandle(forWritingTo: logURL)
-        logHandle?.seekToEndOfFile()
         
         p.standardOutput = logHandle
         p.standardError = logHandle
@@ -67,6 +75,21 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         try? task.run()
     }
     
+    func exportLogs() {
+        let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
+        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0].appendingPathComponent("SuperSay_Backend_Log.txt")
+        
+        do {
+            if FileManager.default.fileExists(atPath: desktop.path) {
+                try FileManager.default.removeItem(at: desktop)
+            }
+            try FileManager.default.copyItem(at: logURL, to: desktop)
+            print("✅ Backend Logs exported to Desktop")
+        } catch {
+            print("❌ Failed to export logs: \(error)")
+        }
+    }
+    
     // MARK: - API
     
     func checkHealth() async -> Bool {
@@ -74,7 +97,7 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         var request = URLRequest(url: healthURL)
         request.timeoutInterval = 5
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             
             // Check if backend is in "Initializing" state (model loading)

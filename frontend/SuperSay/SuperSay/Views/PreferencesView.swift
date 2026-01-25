@@ -234,6 +234,17 @@ struct PreferencesView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.cyan)
                         .help("Manually export the most recently generated audio clip.")
+                        
+                        Button {
+                            vm.exportLogs()
+                        } label: {
+                            Label("Export Debug Logs", systemImage: "doc.text.fill")
+                                .font(vm.appFont(size: 13, weight: .bold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 8)
+                        }
+                        .buttonStyle(.bordered)
+                        .help("Save backend usage logs to Desktop for troubleshooting.")
                     }
                 }
             }
