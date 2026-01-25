@@ -30,18 +30,23 @@ def health_check():
 @router.post("/speak")
 async def speak(req: SpeakRequest):
     try:
+        print(f"DEBUG [API] >>> New Request Received")
+        print(f'DEBUG [API] Text: "{req.text}"')
         print(
-            f"[API] 🎙️ Received streaming speak request: {len(req.text)} chars, voice={req.voice}, speed={req.speed}"
+            f"DEBUG [API] Voice: {req.voice}, Speed: {req.speed}, Volume: {req.volume}"
         )
 
         # Check if model is initialized early to catch errors before streaming
         if TTSEngine._model is None:
             raise RuntimeError("Model not initialized")
 
-        # TTSEngine.generate is now a generator of raw numpy audio samples
+        # TTSEngine.generate is now an async generator
         raw_samples_generator = TTSEngine.generate(req.text, req.voice, req.speed)
+        print(
+            f'DEBUG [TTS] >>> Starting Generation for: "{req.text[:50]}..."'
+        )  # Added tracing log here
 
-        # AudioService.stream_samples_to_wav is a generator of WAV byte chunks
+        # AudioService.stream_samples_to_wav is now an async generator
         wav_chunk_generator = AudioService.stream_samples_to_wav(
             raw_samples_generator, req.volume
         )

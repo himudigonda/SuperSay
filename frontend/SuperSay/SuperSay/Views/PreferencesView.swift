@@ -6,6 +6,8 @@ struct PreferencesView: View {
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var launchManager: LaunchManager
     
+    @AppStorage("showMenuBarIcon") var showMenuBarIcon = true
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
@@ -186,6 +188,14 @@ struct PreferencesView: View {
                         
                         Toggle(isOn: $launchManager.isLaunchAtLoginEnabled) {
                             Text("Start at Login")
+                                .font(vm.appFont(size: 14))
+                        }
+                        .toggleStyle(.switch)
+                        
+                        Divider()
+                        
+                        Toggle(isOn: $showMenuBarIcon) {
+                            Text("Show Menu Bar Icon")
                                 .font(vm.appFont(size: 14))
                         }
                         .toggleStyle(.switch)

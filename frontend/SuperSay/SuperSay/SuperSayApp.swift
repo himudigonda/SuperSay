@@ -105,6 +105,8 @@ struct SuperSayApp: App {
         print("⌨️ KeyboardShortcuts: All shortcuts registered.")
     }
     
+    @AppStorage("showMenuBarIcon") var showMenuBarIcon = true
+    
     var body: some Scene {
         WindowGroup(id: "dashboard") {
             SuperSayWindow()
@@ -117,7 +119,7 @@ struct SuperSayApp: App {
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["dashboard"])
         
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showMenuBarIcon) {
             Button("Speak Selection") { Task { await dashboardVM.speakSelection() } }
             Button("Stop") { audio.stop() }
             Button("Quit") { 
@@ -125,7 +127,7 @@ struct SuperSayApp: App {
                 NSApplication.shared.terminate(nil) 
             }
         } label: {
-            Image(systemName: "waveform.circle.fill")
+            Image("MenuBarIcon")
         }
     }
 }

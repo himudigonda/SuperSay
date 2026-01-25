@@ -12,6 +12,7 @@ class DashboardViewModel: ObservableObject {
     // State
     @Published var status: AppStatus = .ready
     @Published var isBackendOnline = false
+    @Published var isBackendInitializing = true // Start as initializing
     @Published var selectedTab: String? = "home"
     
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
@@ -117,37 +118,79 @@ class DashboardViewModel: ObservableObject {
     }
     
     func speak(text: String) async {
+        print("DEBUG [DashboardVM] speak() called with text: \"\(text)\"")
         status = .thinking
         
-        // Pre-processing
         let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
+        print("DEBUG [DashboardVM] Sanitized text: \"\(cleaned)\"")
+        audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
         
+        print("DEBUG [DashboardVM] Sending full text stream...")
         audio.prepareForStream()
         
-        let stream = await backend.streamAudio(
+        let stream = backend.streamAudio(
             text: cleaned,
             voice: selectedVoice,
             speed: speechSpeed,
             volume: speechVolume
         )
-        
+            
+        // 3. Playback Loop
+        print("DEBUG [DashboardVM] Starting chunk consumption loop...")
+        var totalChunks = 0
         for await chunk in stream {
+            totalChunks += 1
             if status == .thinking {
                 status = .speaking
             }
             audio.playChunk(chunk, volume: Float(speechVolume))
         }
+        print("DEBUG [DashboardVM] Loop finished. Received \(totalChunks) chunks.")
         
         audio.finishStream()
-        print("🎬 DashboardViewModel: Stream finished")
+        print("🎬 DashboardViewModel: Total stream finished")
         history.log(text: cleaned, voice: selectedVoice)
         MetricsService.shared.trackGeneration(charCount: cleaned.count)
+    }
+    
+    private func splitIntoSentences(_ text: String) -> [String] {
+        // Use a simple split but handle common abbreviations
+        // A better approach would be NSLinguisticTagger, but this is faster for TTS chunks
+        
+        var result: [String] = []
+        let range = NSRange(text.startIndex..., in: text)
+        let regex = try? NSRegularExpression(pattern: "[^.!?]+[.!?]*", options: [])
+        regex?.enumerateMatches(in: text, options: [], range: range) { match, _, _ in
+            if let matchRange = match?.range, let swiftRange = Range(matchRange, in: text) {
+                let s = text[swiftRange].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !s.isEmpty { result.append(s) }
+            }
+        }
+        
+        return result.isEmpty ? [text] : result
     }
     
     func startHeartbeat() {
         Task {
             while true {
                 isBackendOnline = await backend.checkHealth()
+                
+                DispatchQueue.main.async {
+                    if self.isBackendOnline {
+                         self.isBackendInitializing = false
+                    } else {
+                         // If we are offline, we are likely initializing or failed
+                         // We let BackendService's isLaunching state dictate this implicitly, 
+                         // but for now, if offline, we assume initializing loop
+                         Task {
+                             let launching = self.backend.isLaunching
+                             DispatchQueue.main.async {
+                                 self.isBackendInitializing = launching
+                             }
+                         }
+                    }
+                }
+                
                 if !isBackendOnline { await backend.start() }
                 try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
             }
