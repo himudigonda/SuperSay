@@ -18,7 +18,8 @@ dev-dependencies = [
     "ruff>=0.1.0",
     "black>=24.0.0",
     "pytest>=8.0.0",
-    "httpx>=0.26.0" 
+    "httpx>=0.26.0",
+    "pytest-codspeed>=4.2.0"
 ]
 
 [tool.ruff]
