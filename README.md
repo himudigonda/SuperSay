@@ -15,6 +15,7 @@
 ![TTS Engine](https://img.shields.io/badge/TTS_Engine-Kokoro--82M-blueviolet?style=for-the-badge)
 ![Model Format](https://img.shields.io/badge/Model_Format-ONNX-00529B?style=for-the-badge&logo=onnx&logoColor=white)
 ![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+[![CodSpeed](https://img.shields.io/badge/CodSpeed-Performance-FF6B35?style=for-the-badge)](https://codspeed.io/himudigonda/SuperSay?utm_source=badge)
 ![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 ![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)
 
