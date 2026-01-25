@@ -120,29 +120,65 @@ class DashboardViewModel: ObservableObject {
     func speak(text: String) async {
         status = .thinking
         
-        // Pre-processing
+        // 1. Pre-processing & Splitting
         let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
+        let sentences = splitIntoSentences(cleaned)
         
+        print("🎙️ DashboardViewModel: Parallelizing \(sentences.count) sentences...")
         audio.prepareForStream()
         
-        let stream = await backend.streamAudio(
-            text: cleaned,
-            voice: selectedVoice,
-            speed: speechSpeed,
-            volume: speechVolume
-        )
-        
-        for await chunk in stream {
-            if status == .thinking {
-                status = .speaking
+        // 2. Start parallel requests for each sentence
+        // We'll process them in windows (max 5 at a time) to avoid overwhelming the backend
+        let windowSize = 5
+        for i in stride(from: 0, to: sentences.count, by: windowSize) {
+            let end = min(i + windowSize, sentences.count)
+            let window = sentences[i..<end]
+            
+            // Start all streams in this window
+            var streams: [AsyncStream<Data>] = []
+            for sentence in window {
+                let stream = await backend.streamAudio(
+                    text: String(sentence),
+                    voice: selectedVoice,
+                    speed: speechSpeed,
+                    volume: speechVolume
+                )
+                streams.append(stream)
             }
-            audio.playChunk(chunk, volume: Float(speechVolume))
+            
+            // Sequential playback of parallel-fetched streams
+            for (idx, stream) in streams.enumerated() {
+                for await chunk in stream {
+                    if status == .thinking {
+                        status = .speaking
+                    }
+                    audio.playChunk(chunk, volume: Float(speechVolume))
+                }
+                print("✅ DashboardViewModel: Finished sentence \(i + idx + 1)/\(sentences.count)")
+            }
         }
         
         audio.finishStream()
-        print("🎬 DashboardViewModel: Stream finished")
+        print("🎬 DashboardViewModel: Total stream finished")
         history.log(text: cleaned, voice: selectedVoice)
         MetricsService.shared.trackGeneration(charCount: cleaned.count)
+    }
+    
+    private func splitIntoSentences(_ text: String) -> [String] {
+        // Use a simple split but handle common abbreviations
+        // A better approach would be NSLinguisticTagger, but this is faster for TTS chunks
+        
+        var result: [String] = []
+        let range = NSRange(text.startIndex..., in: text)
+        let regex = try? NSRegularExpression(pattern: "[^.!?]+[.!?]*", options: [])
+        regex?.enumerateMatches(in: text, options: [], range: range) { match, _, _ in
+            if let matchRange = match?.range, let swiftRange = Range(matchRange, in: text) {
+                let s = text[swiftRange].trimmingCharacters(in: .whitespacesAndNewlines)
+                if !s.isEmpty { result.append(s) }
+            }
+        }
+        
+        return result.isEmpty ? [text] : result
     }
     
     func startHeartbeat() {

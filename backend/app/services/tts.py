@@ -1,13 +1,12 @@
 import re
 
+# NEW: Import for typing the generator
+from typing import Generator
+
 import numpy as np
 from app.core.config import settings
 from app.services.audio import AudioService
 from kokoro_onnx import Kokoro
-
-
-# NEW: Import for typing the generator
-from typing import Generator
 
 
 class TTSEngine:
@@ -27,15 +26,14 @@ class TTSEngine:
                 raise e
 
     @classmethod
-    # CHANGE: Return type is now a generator of np.ndarray
-    def generate(
-        cls, text: str, voice: str, speed: float
-    ) -> Generator[np.ndarray, None, None]:
+    # CHANGE: Return type is now an async generator
+    async def generate(cls, text: str, voice: str, speed: float):
         if not cls._model:
             raise RuntimeError("Model not initialized. Call initialize() first.")
 
+        import anyio
+
         # 1. Clean & Split Text
-        # Split by punctuation followed by space to preserve flow
         raw_text = text.replace("\n", " ").strip()
         sentences = re.split(r"(?<=[.!?])\s+", raw_text)
         sentences = [s for s in sentences if len(s.strip()) > 0]
@@ -44,20 +42,20 @@ class TTSEngine:
             sentences = [raw_text]
 
         silence = AudioService.generate_silence(0.2)
-        is_first_chunk = True  # Flag to avoid leading silence
+        is_first_chunk = True
 
-        # 2. Inference Loop: Now a generator (uses 'yield')
+        # 2. Inference Loop: Now async
         for sentence in sentences:
-            # Limit token check is handled internally by Kokoro-ONNX usually,
-            # but chunking helps latency perception.
-            audio, _ = cls._model.create(
-                sentence, voice=voice, speed=speed, lang="en-us"
+            # Run blocking inference in a thread to allow other requests to proceed
+            audio, _ = await anyio.to_thread.run_sync(
+                lambda: cls._model.create(
+                    sentence, voice=voice, speed=speed, lang="en-us"
+                )
             )
 
             if audio is not None:
-                # Add silence between chunks, but not before the first one
                 if not is_first_chunk:
                     yield silence
 
-                yield audio  # Yield the audio samples for the sentence
+                yield audio
                 is_first_chunk = False

@@ -7,7 +7,7 @@ actor BackendService: NSObject, URLSessionDataDelegate {
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
     
     // Streaming state
-    private var continuation: AsyncStream<Data>.Continuation?
+    private var continuations: [Int: AsyncStream<Data>.Continuation] = [:]
     
     // MARK: - Process Management
     
@@ -15,12 +15,10 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         guard process == nil && !isLaunching else { return }
         isLaunching = true
         
-        // 1. Determine Paths
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let backendFolder = appSupport.appendingPathComponent("SuperSayServer")
         let executableURL = backendFolder.appendingPathComponent("SuperSayServer")
         
-        // 2. Unzip if needed
         if !FileManager.default.fileExists(atPath: executableURL.path) {
             print("📦 BackendService: Installing backend engine...")
             self.log(message: "📦 Installing backend engine...")
@@ -33,7 +31,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             }
             
             do {
-                // Determine 'unzip' path
                 let unzipProcess = Process()
                 unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
                 unzipProcess.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
@@ -48,7 +45,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             }
         }
         
-        // Check if already running (pkill cleanup)
         let cleanup = Process()
         cleanup.launchPath = "/usr/bin/pkill"
         cleanup.arguments = ["-f", "SuperSayServer"]
@@ -58,36 +54,29 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         let p = Process()
         p.executableURL = executableURL
         
-        // FIX: Force Python to unbuffer output so logs appear immediately
         var env = ProcessInfo.processInfo.environment
         env["PYTHONUNBUFFERED"] = "1"
         p.environment = env
         
-        // Use Pipes instead of FileHandle to ensure capture in Sandbox
         let pipe = Pipe()
         p.standardOutput = pipe
         p.standardError = pipe
         
-        // Log File Setup
         let logURL = appSupport.appendingPathComponent("backend.log")
         if !FileManager.default.fileExists(atPath: logURL.path) {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
         
-        // Truncate
         try? "".write(to: logURL, atomically: true, encoding: .utf8)
         
-        // Start Reading Pipe
-        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+        pipe.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             if data.isEmpty { return }
             if let str = String(data: data, encoding: .utf8) {
-                // Determine destination
                 try? FileHandle(forWritingTo: logURL).seekToEndOfFile()
                 try? FileHandle(forWritingTo: logURL).write(contentsOf: data)
                 try? FileHandle(forWritingTo: logURL).closeFile()
-                
-                print("[BACKEND] \(str)") // Print to Xcode console too
+                print("[BACKEND] \(str)")
             }
         }
         
@@ -96,7 +85,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             process = p
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
             
-            // Give it time to bind and load models
             Task {
                 try? await Task.sleep(nanoseconds: 3 * 1_000_000_000)
                 isLaunching = false
@@ -128,7 +116,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         process?.terminate()
         process = nil
         
-        // Force kill to be safe
         let task = Process()
         task.launchPath = "/usr/bin/pkill"
         task.arguments = ["-9", "-f", "SuperSayServer"]
@@ -150,8 +137,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         }
     }
     
-    // MARK: - API
-    
     func checkHealth() async -> Bool {
         let healthURL = baseURL.appendingPathComponent("health")
         var request = URLRequest(url: healthURL)
@@ -160,7 +145,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             let (_, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
             
-            // Check if backend is in "Initializing" state (model loading)
             if statusCode == 503 {
                 print("📡 Backend: Still loading models...")
                 return false
@@ -181,8 +165,6 @@ actor BackendService: NSObject, URLSessionDataDelegate {
     
     func streamAudio(text: String, voice: String, speed: Double, volume: Double) -> AsyncStream<Data> {
         return AsyncStream { continuation in
-            self.continuation = continuation
-            
             let url = baseURL.appendingPathComponent("speak")
             var request = URLRequest(url: url)
             request.httpMethod = "POST"
@@ -199,48 +181,57 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             do {
                 request.httpBody = try JSONSerialization.data(withJSONObject: payload)
                 
-                print("📡 BackendService: Starting stream for \(text.count) chars")
-                
                 let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
                 let task = session.dataTask(with: request)
+                
+                let id = Int.random(in: 1...Int.max)
+                task.taskDescription = "\(id)"
+                self.continuations[id] = continuation
+                
                 task.resume()
                 
+                continuation.onTermination = { @Sendable _ in
+                    task.cancel()
+                    Task { [id] in
+                        await self.removeContinuation(id: id)
+                    }
+                }
             } catch {
                 print("❌ BackendService: Failed to create request: \(error)")
                 continuation.finish()
             }
-            
-            continuation.onTermination = { @Sendable _ in
-                // Task was cancelled or finished
-            }
         }
+    }
+    
+    private func removeContinuation(id: Int) {
+        continuations.removeValue(forKey: id)
     }
     
     // MARK: - URLSessionDataDelegate
     
     nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let idString = dataTask.taskDescription, let id = Int(idString) else { return }
         Task {
-            await self.handleIncomingData(data)
+            await self.yieldData(id: id, data: data)
         }
     }
     
     nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let idString = task.taskDescription, let id = Int(idString) else { return }
         Task {
             if let error = error {
-                print("❌ BackendService: Stream error: \(error.localizedDescription)")
-            } else {
-                print("✅ BackendService: Stream finished successfully")
+                print("❌ BackendService: Stream \(id) error: \(error.localizedDescription)")
             }
-            await self.finishStream()
+            await self.finishContinuation(id: id)
         }
     }
     
-    private func handleIncomingData(_ data: Data) {
-        continuation?.yield(data)
+    private func yieldData(id: Int, data: Data) {
+        continuations[id]?.yield(data)
     }
     
-    private func finishStream() {
-        continuation?.finish()
-        continuation = nil
+    private func finishContinuation(id: Int) {
+        continuations[id]?.finish()
+        continuations.removeValue(forKey: id)
     }
 }
