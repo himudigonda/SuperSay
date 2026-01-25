@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "SuperSay Backend"
     VERSION: str = "1.0.0"
     HOST: str = "0.0.0.0"
-    PORT: int = 8000
+    PORT: int = 10101
 
     # Paths
     BASE_DIR: str = os.path.dirname(

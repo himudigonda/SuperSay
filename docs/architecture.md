@@ -8,7 +8,7 @@ We use a **Local Server Sidecar** approach.
 
 1.  **Launch**: When the macOS app starts, `LaunchManager` spins up a subprocess executing the compiled `SuperSayServer` binary (or `main.py` in dev mode).
 2.  **Health Check**: The Swift app polls `GET /health` until the model is loaded into memory.
-3.  **Communication**: All requests are sent via HTTP (REST) to `localhost:8000`.
+3.  **Communication**: All requests are sent via HTTP (REST) to `localhost:10101`.
 
 ## Audio Pipeline
 

@@ -4,7 +4,7 @@ import Combine
 actor BackendService {
     private var process: Process?
     private var isLaunching = false
-    private let baseURL = URL(string: "http://127.0.0.1:8000")!
+    private let baseURL = URL(string: "http://127.0.0.1:10101")!
     
     // MARK: - Process Management
     
