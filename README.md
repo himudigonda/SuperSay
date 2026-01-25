@@ -89,9 +89,10 @@ uv sync
 
 ## 📚 Documentation
 
-* [**Architecture Deep Dive**](docs/ARCHITECTURE.md): How the Swift-Python bridge works.
+* [**Architecture Deep Dive**](docs/architecture.md): How the Swift-Python bridge works.
 * [**Feature Roadmap**](docs/ROADMAP.md): What's coming next.
 * [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and best practices.
+* [**Release Maintenance**](docs/release.md): How to create tags and GH releases.
 * [**Backend Details**](backend/README.md): API and Model technicals.
 * [**Frontend Details**](frontend/README.md): SwiftUI architecture.
 * [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.

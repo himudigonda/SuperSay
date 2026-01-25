@@ -132,6 +132,14 @@ struct SuperSayWindow: View {
         }
         .frame(minWidth: 800, minHeight: 600)
         .preferredColorScheme(vm.appTheme == "system" ? nil : (vm.appTheme == "dark" ? .dark : .light))
+        .sheet(isPresented: $vm.showUpdateSheet) {
+            UpdateView()
+                .environmentObject(vm)
+        }
+        .onAppear {
+            // Background check for updates on startup
+            vm.checkForUpdates(manual: false)
+        }
     }
     
     @ViewBuilder

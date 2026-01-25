@@ -23,6 +23,12 @@ class DashboardViewModel: ObservableObject {
     @AppStorage("telemetryEnabled") var telemetryEnabled = true
     @AppStorage("selectedFontName") var selectedFontName = "System Rounded"
     
+    // Update State
+    @Published var availableUpdate: GitHubRelease?
+    @Published var allRelevantReleases: [GitHubRelease] = []
+    @Published var showUpdateSheet = false
+    @Published var hasUpdate = false
+    
     // Helper to get Font
     func appFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
         switch selectedFontName {
@@ -164,31 +170,26 @@ class DashboardViewModel: ObservableObject {
     }
     
     // --- UPDATE CHECKER ---
-    func checkForUpdates() {
+    func checkForUpdates(manual: Bool = true) {
         Task {
-            guard let url = URL(string: "https://api.github.com/repos/himudigonda/SuperSay/releases/latest") else { return }
+            // Fetch ALL releases to aggregate changelogs
+            guard let url = URL(string: "https://api.github.com/repos/himudigonda/SuperSay/releases") else { return }
             do {
                 let (data, _) = try await URLSession.shared.data(from: url)
-                let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+                let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
                 
                 let currentVersion = "v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                 
-                if release.tag_name != currentVersion {
-                    print("🚀 New version available: \(release.tag_name)")
-                    DispatchQueue.main.async {
-                        let alert = NSAlert()
-                        alert.messageText = "Update Available"
-                        alert.informativeText = "A new version of SuperSay (\(release.tag_name)) is available."
-                        alert.addButton(withTitle: "Download")
-                        alert.addButton(withTitle: "Cancel")
-                        
-                        if alert.runModal() == .alertFirstButtonReturn {
-                            if let link = URL(string: release.html_url) {
-                                NSWorkspace.shared.open(link)
-                            }
-                        }
-                    }
-                } else {
+                // Filter releases newer than current
+                let newer = releases.filter { $0.tag_name != currentVersion && isNewer($0.tag_name, than: currentVersion) }
+                
+                if let latest = newer.first {
+                    print("🚀 New version available: \(latest.tag_name)")
+                    self.availableUpdate = latest
+                    self.allRelevantReleases = newer
+                    self.hasUpdate = true
+                    self.showUpdateSheet = true
+                } else if manual {
                     DispatchQueue.main.async {
                         let alert = NSAlert()
                         alert.messageText = "You're Up to Date"
@@ -202,9 +203,28 @@ class DashboardViewModel: ObservableObject {
             }
         }
     }
+    
+    private func isNewer(_ version: String, than current: String) -> Bool {
+        let v1 = version.replacingOccurrences(of: "v", with: "").split(separator: ".").compactMap { Int($0) }
+        let v2 = current.replacingOccurrences(of: "v", with: "").split(separator: ".").compactMap { Int($0) }
+        
+        for i in 0..<min(v1.count, v2.count) {
+            if v1[i] > v2[i] { return true }
+            if v1[i] < v2[i] { return false }
+        }
+        return v1.count > v2.count
+    }
 }
 
 struct GitHubRelease: Codable {
     let tag_name: String
+    let name: String
+    let body: String
     let html_url: String
+    let assets: [Asset]
+    
+    struct Asset: Codable {
+        let name: String
+        let browser_download_url: URL
+    }
 }

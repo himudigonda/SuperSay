@@ -86,9 +86,27 @@ test-frontend:
 		-destination 'platform=macOS,arch=arm64' 
 	@echo "⚠️ Frontend test execution relies on correctly configured XCTest targets in Xcode."
 
+# --- 📦 RELEASES ---
+release: clean
+	@echo "🚀 Starting Full Release Build for v$(VERSION)..."
+	chmod +x scripts/create_dmg.sh
+	./scripts/create_dmg.sh $(VERSION)
+	@echo "✅ Release Ready: build/SuperSay-$(VERSION).dmg"
+
 # --- 🧹 UTILS ---
 clean:
 	@echo "🗑️ Cleaning artifacts..."
 	rm -rf backend/dist backend/build
 	rm -rf $(BUILD_DIR)
 	rm -rf frontend/SuperSay/SuperSay/Resources/SuperSayServer
+
+help:
+	@echo "SuperSay Automation Hub"
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  setup           Install dependencies"
+	@echo "  run             Build and launch app"
+	@echo "  test            Run all test suites"
+	@echo "  release VERSION=x.x.x  Build pretty DMG for distribution"
+	@echo "  clean           Wipe build artifacts"
