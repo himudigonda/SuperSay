@@ -108,10 +108,7 @@ struct UpdateView: View {
                                         .font(vm.appFont(size: 14, weight: .bold))
                                 }
                                 
-                                Text(release.body)
-                                    .font(vm.appFont(size: 13))
-                                    .lineSpacing(4)
-                                    .foregroundStyle(.secondary)
+                                MarkdownRenderView(markdown: release.body, vm: vm)
                             }
                             
                             if release.tag_name != vm.allRelevantReleases.last?.tag_name {
@@ -255,6 +252,47 @@ struct UpdateView: View {
                 } else {
                     isInstalling = false
                     errorMessage = "Installation failed: \(error?.description ?? result.stringValue ?? "Unknown error")"
+                }
+            }
+        }
+    }
+}
+
+// Custom Markdown Parser View
+struct MarkdownRenderView: View {
+    let markdown: String
+    let vm: DashboardViewModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(markdown.split(separator: "\n"), id: \.self) { lineSubstring in
+                let line = String(lineSubstring).trimmingCharacters(in: .whitespaces)
+                
+                if line.hasPrefix("### ") {
+                    Text(LocalizedStringKey(line.replacingOccurrences(of: "### ", with: "")))
+                        .font(vm.appFont(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.top, 8)
+                } else if line.hasPrefix("## ") {
+                    Text(LocalizedStringKey(line.replacingOccurrences(of: "## ", with: "")))
+                        .font(vm.appFont(size: 16, weight: .black))
+                        .foregroundStyle(.cyan)
+                        .padding(.top, 10)
+                } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text("•")
+                            .font(vm.appFont(size: 13, weight: .bold))
+                            .foregroundStyle(.secondary)
+                        Text(LocalizedStringKey(line.replacingOccurrences(of: "- ", with: "").replacingOccurrences(of: "* ", with: "")))
+                            .font(vm.appFont(size: 13))
+                            .foregroundStyle(.secondary)
+                            .lineSpacing(4)
+                    }
+                } else if !line.isEmpty {
+                    Text(LocalizedStringKey(line))
+                        .font(vm.appFont(size: 13))
+                        .foregroundStyle(.secondary.opacity(0.8))
+                        .lineSpacing(4)
                 }
             }
         }
