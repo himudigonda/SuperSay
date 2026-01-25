@@ -10,11 +10,27 @@
 		80E015062F24146E003FB2E4 /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 80E015052F24146E003FB2E4 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		803C88902F26758A003C0CAC /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 80E014EE2F241426003FB2E4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 80E014F52F241426003FB2E4;
+			remoteInfo = SuperSay;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		803C888C2F26758A003C0CAC /* SuperSayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SuperSayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		80E014F62F241426003FB2E4 /* SuperSay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SuperSay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		803C888D2F26758A003C0CAC /* SuperSayTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SuperSayTests;
+			sourceTree = "<group>";
+		};
 		80E014F82F241426003FB2E4 /* SuperSay */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = SuperSay;
@@ -23,6 +39,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		803C88892F26758A003C0CAC /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		80E014F32F241426003FB2E4 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -38,6 +61,7 @@
 			isa = PBXGroup;
 			children = (
 				80E014F82F241426003FB2E4 /* SuperSay */,
+				803C888D2F26758A003C0CAC /* SuperSayTests */,
 				80E014F72F241426003FB2E4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -46,6 +70,7 @@
 			isa = PBXGroup;
 			children = (
 				80E014F62F241426003FB2E4 /* SuperSay.app */,
+				803C888C2F26758A003C0CAC /* SuperSayTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,6 +78,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		803C888B2F26758A003C0CAC /* SuperSayTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 803C88942F26758A003C0CAC /* Build configuration list for PBXNativeTarget "SuperSayTests" */;
+			buildPhases = (
+				803C88882F26758A003C0CAC /* Sources */,
+				803C88892F26758A003C0CAC /* Frameworks */,
+				803C888A2F26758A003C0CAC /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				803C88912F26758A003C0CAC /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				803C888D2F26758A003C0CAC /* SuperSayTests */,
+			);
+			name = SuperSayTests;
+			packageProductDependencies = (
+			);
+			productName = SuperSayTests;
+			productReference = 803C888C2F26758A003C0CAC /* SuperSayTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		80E014F52F241426003FB2E4 /* SuperSay */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 80E015012F241427003FB2E4 /* Build configuration list for PBXNativeTarget "SuperSay" */;
@@ -87,6 +135,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					803C888B2F26758A003C0CAC = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 80E014F52F241426003FB2E4;
+					};
 					80E014F52F241426003FB2E4 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -110,11 +162,19 @@
 			projectRoot = "";
 			targets = (
 				80E014F52F241426003FB2E4 /* SuperSay */,
+				803C888B2F26758A003C0CAC /* SuperSayTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		803C888A2F26758A003C0CAC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		80E014F42F241426003FB2E4 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -145,6 +205,13 @@
 /* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		803C88882F26758A003C0CAC /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		80E014F22F241426003FB2E4 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -154,7 +221,57 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		803C88912F26758A003C0CAC /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 80E014F52F241426003FB2E4 /* SuperSay */;
+			targetProxy = 803C88902F26758A003C0CAC /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		803C88922F26758A003C0CAC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WL37Y6X6V9;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.himudigonda.SuperSayTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperSay.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SuperSay";
+			};
+			name = Debug;
+		};
+		803C88932F26758A003C0CAC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = WL37Y6X6V9;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.himudigonda.SuperSayTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SuperSay.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SuperSay";
+			};
+			name = Release;
+		};
 		80E014FF2F241427003FB2E4 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -370,6 +487,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		803C88942F26758A003C0CAC /* Build configuration list for PBXNativeTarget "SuperSayTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				803C88922F26758A003C0CAC /* Debug */,
+				803C88932F26758A003C0CAC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		80E014F12F241426003FB2E4 /* Build configuration list for PBXProject "SuperSay" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

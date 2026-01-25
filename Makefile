@@ -67,9 +67,24 @@ format:
 	@echo "✨ Formatting Python..."
 	cd backend && uv run black .
 
-test:
+# --- 🧪 TESTS ---
+
+test: test-backend test-frontend
+	@echo "✅ All tests passed."
+
+test-backend:
 	@echo "🧪 Testing Backend..."
-	cd backend && uv run pytest
+	# Run pytest with the new test logic
+	cd backend && uv run pytest -v
+
+test-frontend:
+	@echo "🧪 Testing Frontend..."
+	# Standard Xcode test command to run all unit tests in the main scheme
+	xcodebuild test \
+		-project frontend/SuperSay/SuperSay.xcodeproj \
+		-scheme SuperSay \
+		-destination 'platform=macOS,arch=arm64' 
+	@echo "⚠️ Frontend test execution relies on correctly configured XCTest targets in Xcode."
 
 # --- 🧹 UTILS ---
 clean:

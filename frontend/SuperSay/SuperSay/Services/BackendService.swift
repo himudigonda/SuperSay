@@ -1,10 +1,13 @@
 import Foundation
 import Combine
 
-actor BackendService {
+actor BackendService: NSObject, URLSessionDataDelegate {
     private var process: Process?
     private var isLaunching = false
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
+    
+    // Streaming state
+    private var continuation: AsyncStream<Data>.Continuation?
     
     // MARK: - Process Management
     
@@ -15,6 +18,13 @@ actor BackendService {
             print("❌ Backend binary not found in Bundle!")
             return
         }
+        
+        // Check if already running (pkill cleanup)
+        let cleanup = Process()
+        cleanup.launchPath = "/usr/bin/pkill"
+        cleanup.arguments = ["-f", "SuperSayServer"]
+        try? cleanup.run()
+        cleanup.waitUntilExit()
         
         let p = Process()
         p.executableURL = url
@@ -37,7 +47,7 @@ actor BackendService {
             
             // Give it time to bind and load models
             Task {
-                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: 3 * 1_000_000_000)
                 isLaunching = false
             }
         } catch {
@@ -53,7 +63,7 @@ actor BackendService {
         // Force kill to be safe
         let task = Process()
         task.launchPath = "/usr/bin/pkill"
-        task.arguments = ["-9", "SuperSayServer"]
+        task.arguments = ["-9", "-f", "SuperSayServer"]
         try? task.run()
     }
     
@@ -62,53 +72,92 @@ actor BackendService {
     func checkHealth() async -> Bool {
         let healthURL = baseURL.appendingPathComponent("health")
         var request = URLRequest(url: healthURL)
-        request.timeoutInterval = 10 // Increased for model loading
+        request.timeoutInterval = 5
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             let statusCode = (response as? HTTPURLResponse)?.statusCode ?? 0
+            
+            // Check if backend is in "Initializing" state (model loading)
+            if statusCode == 503 {
+                print("📡 Backend: Still loading models...")
+                return false
+            }
+            
             let isOnline = statusCode == 200
-            if isOnline { 
-                if isLaunching { print("📡 Backend is now Online") }
+            if isOnline && isLaunching { 
+                print("📡 Backend is now Online")
                 isLaunching = false 
             }
             return isOnline
         } catch {
-            // print("⚠️ Health Check Failed: \(error.localizedDescription)")
             return false
         }
     }
     
-    func generateAudio(text: String, voice: String, speed: Double, volume: Double) async throws -> Data {
-        let url = baseURL.appendingPathComponent("speak")
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 60 // Long timeout for long text
-        
-        let payload: [String: Any] = [
-            "text": text,
-            "voice": voice,
-            "speed": speed,
-            "volume": volume
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
-        
-        print("📡 BackendService: POST /speak (\(text.count) chars)")
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            print("❌ BackendService: Invalid response type")
-            throw URLError(.badServerResponse)
+    // MARK: - Streaming API
+    
+    func streamAudio(text: String, voice: String, speed: Double, volume: Double) -> AsyncStream<Data> {
+        return AsyncStream { continuation in
+            self.continuation = continuation
+            
+            let url = baseURL.appendingPathComponent("speak")
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.timeoutInterval = 60
+            
+            let payload: [String: Any] = [
+                "text": text,
+                "voice": voice,
+                "speed": speed,
+                "volume": volume
+            ]
+            
+            do {
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+                
+                print("📡 BackendService: Starting stream for \(text.count) chars")
+                
+                let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+                let task = session.dataTask(with: request)
+                task.resume()
+                
+            } catch {
+                print("❌ BackendService: Failed to create request: \(error)")
+                continuation.finish()
+            }
+            
+            continuation.onTermination = { @Sendable _ in
+                // Task was cancelled or finished
+            }
         }
-        
-        print("📡 BackendService: Received status \(httpResponse.statusCode), \(data.count) bytes")
-        
-        guard httpResponse.statusCode == 200 else {
-            print("❌ BackendService: Server error \(httpResponse.statusCode)")
-            throw URLError(.badServerResponse)
+    }
+    
+    // MARK: - URLSessionDataDelegate
+    
+    nonisolated func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        Task {
+            await self.handleIncomingData(data)
         }
-        
-        return data
+    }
+    
+    nonisolated func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        Task {
+            if let error = error {
+                print("❌ BackendService: Stream error: \(error.localizedDescription)")
+            } else {
+                print("✅ BackendService: Stream finished successfully")
+            }
+            await self.finishStream()
+        }
+    }
+    
+    private func handleIncomingData(_ data: Data) {
+        continuation?.yield(data)
+    }
+    
+    private func finishStream() {
+        continuation?.finish()
+        continuation = nil
     }
 }

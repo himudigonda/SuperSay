@@ -6,6 +6,10 @@ from app.services.audio import AudioService
 from kokoro_onnx import Kokoro
 
 
+# NEW: Import for typing the generator
+from typing import Generator
+
+
 class TTSEngine:
     _instance = None
     _model: Kokoro = None
@@ -23,7 +27,10 @@ class TTSEngine:
                 raise e
 
     @classmethod
-    def generate(cls, text: str, voice: str, speed: float) -> np.ndarray:
+    # CHANGE: Return type is now a generator of np.ndarray
+    def generate(
+        cls, text: str, voice: str, speed: float
+    ) -> Generator[np.ndarray, None, None]:
         if not cls._model:
             raise RuntimeError("Model not initialized. Call initialize() first.")
 
@@ -36,11 +43,11 @@ class TTSEngine:
         if not sentences:
             sentences = [raw_text]
 
-        combined_audio = []
         silence = AudioService.generate_silence(0.2)
+        is_first_chunk = True  # Flag to avoid leading silence
 
-        # 2. Inference Loop
-        for i, sentence in enumerate(sentences):
+        # 2. Inference Loop: Now a generator (uses 'yield')
+        for sentence in sentences:
             # Limit token check is handled internally by Kokoro-ONNX usually,
             # but chunking helps latency perception.
             audio, _ = cls._model.create(
@@ -48,11 +55,9 @@ class TTSEngine:
             )
 
             if audio is not None:
-                if i > 0:
-                    combined_audio.append(silence)
-                combined_audio.append(audio)
+                # Add silence between chunks, but not before the first one
+                if not is_first_chunk:
+                    yield silence
 
-        if not combined_audio:
-            return None
-
-        return np.concatenate(combined_audio)
+                yield audio  # Yield the audio samples for the sentence
+                is_first_chunk = False

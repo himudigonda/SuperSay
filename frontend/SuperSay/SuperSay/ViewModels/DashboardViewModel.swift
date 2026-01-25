@@ -111,21 +111,30 @@ class DashboardViewModel: ObservableObject {
         // Pre-processing
         let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
         
+        audio.prepareForStream()
+        
+        let stream = await backend.streamAudio(
+            text: cleaned,
+            voice: selectedVoice,
+            speed: speechSpeed,
+            volume: speechVolume
+        )
+        
         do {
-            let data = try await backend.generateAudio(
-                text: cleaned,
-                voice: selectedVoice,
-                speed: speechSpeed,
-                volume: speechVolume
-            )
+            for await chunk in stream {
+                if status == .thinking {
+                    status = .speaking
+                }
+                audio.playChunk(chunk, volume: Float(speechVolume))
+            }
             
-            print("🎬 DashboardViewModel: Audio data received, sending to AudioService")
-            try audio.play(data: data, volume: Float(speechVolume))
+            audio.finishStream()
+            print("🎬 DashboardViewModel: Stream finished")
             history.log(text: cleaned, voice: selectedVoice)
             MetricsService.shared.trackGeneration(charCount: cleaned.count)
             
         } catch {
-            print("Error: \(error)")
+            print("❌ DashboardViewModel: Stream error: \(error)")
             status = .error(error.localizedDescription)
         }
     }
