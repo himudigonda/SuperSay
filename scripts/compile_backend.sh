@@ -28,6 +28,10 @@ uv run pyinstaller --clean --noconsole --onefile --noconfirm --name "SuperSaySer
     --collect-all "language_tags" \
     --hidden-import "uvicorn.loops.asyncio" \
     --hidden-import "uvicorn.protocols.http.h11_impl" \
+    --hidden-import "uvicorn.loops.asyncio" \
+    --hidden-import "uvicorn.protocols.http.h11_impl" \
+    --hidden-import "fastapi" \
+    --hidden-import "starlette" \
     app/main.py
 
 # 4. MOVE BINARY

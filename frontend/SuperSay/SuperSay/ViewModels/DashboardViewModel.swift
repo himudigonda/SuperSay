@@ -103,11 +103,16 @@ class DashboardViewModel: ObservableObject {
     }
     
     func speakSelection(text: String? = nil) async {
+        print("⌨️ DashboardViewModel: speakSelection triggered")
         if let text = text {
              await speak(text: text)
              return
         }
-        guard let text = SelectionManager.getSelectedText(), !text.isEmpty else { return }
+        guard let text = SelectionManager.getSelectedText(), !text.isEmpty else {
+            print("⚠️ DashboardViewModel: No text found in selection.")
+            return
+        }
+        print("🎤 DashboardViewModel: Sending \(text.count) chars to backend...")
         await speak(text: text)
     }
     
@@ -126,23 +131,17 @@ class DashboardViewModel: ObservableObject {
             volume: speechVolume
         )
         
-        do {
-            for await chunk in stream {
-                if status == .thinking {
-                    status = .speaking
-                }
-                audio.playChunk(chunk, volume: Float(speechVolume))
+        for await chunk in stream {
+            if status == .thinking {
+                status = .speaking
             }
-            
-            audio.finishStream()
-            print("🎬 DashboardViewModel: Stream finished")
-            history.log(text: cleaned, voice: selectedVoice)
-            MetricsService.shared.trackGeneration(charCount: cleaned.count)
-            
-        } catch {
-            print("❌ DashboardViewModel: Stream error: \(error)")
-            status = .error(error.localizedDescription)
+            audio.playChunk(chunk, volume: Float(speechVolume))
         }
+        
+        audio.finishStream()
+        print("🎬 DashboardViewModel: Stream finished")
+        history.log(text: cleaned, voice: selectedVoice)
+        MetricsService.shared.trackGeneration(charCount: cleaned.count)
     }
     
     func startHeartbeat() {
@@ -213,6 +212,11 @@ class DashboardViewModel: ObservableObject {
             if v1[i] < v2[i] { return false }
         }
         return v1.count > v2.count
+    }
+    func exportLogs() {
+        Task {
+            await backend.exportLogs()
+        }
     }
 }
 

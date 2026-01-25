@@ -27,4 +27,13 @@ app.include_router(router)
 
 if __name__ == "__main__":
     # This entry point is used by PyInstaller and Dev
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT, workers=1, loop="asyncio")
+    # log_config=None prevents uvicorn from overriding logging, access_log=False hides the health spam
+    uvicorn.run(
+        app,
+        host=settings.HOST,
+        port=settings.PORT,
+        workers=1,
+        loop="asyncio",
+        log_config=None,
+        access_log=False,
+    )
