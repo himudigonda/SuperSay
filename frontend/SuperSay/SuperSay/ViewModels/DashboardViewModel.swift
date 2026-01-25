@@ -12,6 +12,7 @@ class DashboardViewModel: ObservableObject {
     // State
     @Published var status: AppStatus = .ready
     @Published var isBackendOnline = false
+    @Published var isBackendInitializing = true // Start as initializing
     @Published var selectedTab: String? = "home"
     
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
@@ -148,6 +149,23 @@ class DashboardViewModel: ObservableObject {
         Task {
             while true {
                 isBackendOnline = await backend.checkHealth()
+                
+                DispatchQueue.main.async {
+                    if self.isBackendOnline {
+                         self.isBackendInitializing = false
+                    } else {
+                         // If we are offline, we are likely initializing or failed
+                         // We let BackendService's isLaunching state dictate this implicitly, 
+                         // but for now, if offline, we assume initializing loop
+                         Task {
+                             let launching = await self.backend.isLaunching
+                             DispatchQueue.main.async {
+                                 self.isBackendInitializing = launching
+                             }
+                         }
+                    }
+                }
+                
                 if !isBackendOnline { await backend.start() }
                 try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
             }

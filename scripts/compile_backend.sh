@@ -16,9 +16,8 @@ uv pip install pyinstaller
 ESPEAK_PATH=$(uv run python -c "import os, espeakng_loader; print(os.path.dirname(espeakng_loader.__file__))")
 
 # 3. COMPILE
-# Notice we point to 'app/main.py' now.
-# We also need --paths . to ensure the 'app' module is found.
-uv run pyinstaller --clean --noconsole --onefile --noconfirm --name "SuperSayServer" \
+# Use --onedir for stability
+uv run pyinstaller --clean --noconsole --onedir --noconfirm --name "SuperSayServer" \
     --paths . \
     --add-data "kokoro-v1.0.onnx:." \
     --add-data "voices-v1.0.bin:." \
@@ -28,16 +27,20 @@ uv run pyinstaller --clean --noconsole --onefile --noconfirm --name "SuperSaySer
     --collect-all "language_tags" \
     --hidden-import "uvicorn.loops.asyncio" \
     --hidden-import "uvicorn.protocols.http.h11_impl" \
-    --hidden-import "uvicorn.loops.asyncio" \
-    --hidden-import "uvicorn.protocols.http.h11_impl" \
     --hidden-import "fastapi" \
     --hidden-import "starlette" \
     app/main.py
 
-# 4. MOVE BINARY
-# UPDATE: Move compiled binary to the new frontend location
-echo "📦 Moving binary to Xcode resources..."
-mkdir -p ../frontend/SuperSay/SuperSay/Resources/
-mv dist/SuperSayServer ../frontend/SuperSay/SuperSay/Resources/SuperSayServer
+# 4. ZIP AND MOVE
+echo "📦 Zipping backend for embedding..."
+cd dist
+zip -r -q SuperSayServer.zip SuperSayServer
+cd ..
 
-echo "✅ Compiled and installed to frontend/SuperSay/SuperSay/Resources/SuperSayServer"
+echo "📦 Moving zip to Xcode resources..."
+mkdir -p ../frontend/SuperSay/SuperSay/Resources/
+rm -rf ../frontend/SuperSay/SuperSay/Resources/SuperSayServer
+rm -f ../frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
+mv dist/SuperSayServer.zip ../frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
+
+echo "✅ Backend zipped and installed to Resources/SuperSayServer.zip"

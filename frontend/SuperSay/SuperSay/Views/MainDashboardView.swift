@@ -37,15 +37,33 @@ struct MainDashboardView: View {
                     .foregroundStyle(.secondary)
                 
                 HStack(spacing: 6) {
-                    Circle()
-                        .fill(vm.isBackendOnline ? Color.green : Color.red)
-                        .frame(width: 6, height: 6)
-                    
-                    Text(vm.isBackendOnline ? "SYSTEM ONLINE" : "OFFLINE")
-                        .font(vm.appFont(size: 9, weight: .bold))
-                        .foregroundStyle(vm.isBackendOnline ? .green : .red)
+                    if vm.isBackendOnline {
+                        Circle()
+                            .fill(Color.green)
+                            .frame(width: 6, height: 6)
+                        Text("SYSTEM ONLINE")
+                            .font(vm.appFont(size: 9, weight: .bold))
+                            .foregroundStyle(.green)
+                    } else if vm.isBackendInitializing {
+                        Circle()
+                            .fill(Color.yellow)
+                            .frame(width: 6, height: 6)
+                        Text("INITIALIZING...")
+                            .font(vm.appFont(size: 9, weight: .bold))
+                            .foregroundStyle(.yellow)
+                    } else {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 6, height: 6)
+                        Text("OFFLINE")
+                            .font(vm.appFont(size: 9, weight: .bold))
+                            .foregroundStyle(.red)
+                    }
                 }
+                .id(vm.isBackendOnline) // Force redraw when online status changes
+                .id(vm.isBackendInitializing)
             }
+            
             Spacer()
             
             HStack(spacing: 12) {

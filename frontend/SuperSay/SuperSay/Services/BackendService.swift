@@ -3,7 +3,7 @@ import Combine
 
 actor BackendService: NSObject, URLSessionDataDelegate {
     private var process: Process?
-    private var isLaunching = false
+    public var isLaunching = false
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
     
     // Streaming state
@@ -14,9 +14,38 @@ actor BackendService: NSObject, URLSessionDataDelegate {
     func start() {
         guard process == nil && !isLaunching else { return }
         isLaunching = true
-        guard let url = Bundle.main.url(forResource: "SuperSayServer", withExtension: nil) else {
-            print("❌ Backend binary not found in Bundle!")
-            return
+        
+        // 1. Determine Paths
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let backendFolder = appSupport.appendingPathComponent("SuperSayServer")
+        let executableURL = backendFolder.appendingPathComponent("SuperSayServer")
+        
+        // 2. Unzip if needed
+        if !FileManager.default.fileExists(atPath: executableURL.path) {
+            print("📦 BackendService: Installing backend engine...")
+            self.log(message: "📦 Installing backend engine...")
+            
+            guard let zipURL = Bundle.main.url(forResource: "SuperSayServer", withExtension: "zip") else {
+                print("❌ Backend ZIP not found in Bundle!")
+                self.log(message: "❌ Backend ZIP not found")
+                isLaunching = false
+                return
+            }
+            
+            do {
+                // Determine 'unzip' path
+                let unzipProcess = Process()
+                unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                unzipProcess.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
+                try unzipProcess.run()
+                unzipProcess.waitUntilExit()
+                print("✅ Backend installed to: \(backendFolder.path)")
+            } catch {
+                print("❌ Failed to unzip backend: \(error)")
+                self.log(message: "❌ Failed to unzip backend: \(error)")
+                isLaunching = false
+                return
+            }
         }
         
         // Check if already running (pkill cleanup)
@@ -27,26 +56,40 @@ actor BackendService: NSObject, URLSessionDataDelegate {
         cleanup.waitUntilExit()
         
         let p = Process()
-        p.executableURL = url
+        p.executableURL = executableURL
         
         // FIX: Force Python to unbuffer output so logs appear immediately
         var env = ProcessInfo.processInfo.environment
         env["PYTHONUNBUFFERED"] = "1"
         p.environment = env
         
-        // redirect to log file
-        let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
+        // Use Pipes instead of FileHandle to ensure capture in Sandbox
+        let pipe = Pipe()
+        p.standardOutput = pipe
+        p.standardError = pipe
+        
+        // Log File Setup
+        let logURL = appSupport.appendingPathComponent("backend.log")
         if !FileManager.default.fileExists(atPath: logURL.path) {
             FileManager.default.createFile(atPath: logURL.path, contents: nil)
         }
         
-        // Truncate file to start fresh for this session
+        // Truncate
         try? "".write(to: logURL, atomically: true, encoding: .utf8)
         
-        let logHandle = try? FileHandle(forWritingTo: logURL)
-        
-        p.standardOutput = logHandle
-        p.standardError = logHandle
+        // Start Reading Pipe
+        pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+            let data = handle.availableData
+            if data.isEmpty { return }
+            if let str = String(data: data, encoding: .utf8) {
+                // Determine destination
+                try? FileHandle(forWritingTo: logURL).seekToEndOfFile()
+                try? FileHandle(forWritingTo: logURL).write(contentsOf: data)
+                try? FileHandle(forWritingTo: logURL).closeFile()
+                
+                print("[BACKEND] \(str)") // Print to Xcode console too
+            }
+        }
         
         do {
             try p.run()
@@ -60,7 +103,24 @@ actor BackendService: NSObject, URLSessionDataDelegate {
             }
         } catch {
             print("❌ Failed to launch backend: \(error)")
+            self.log(message: "❌ Failed to launch backend: \(error)")
             isLaunching = false
+        }
+    }
+    
+    private func log(message: String) {
+        let logURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("backend.log")
+        let entry = "\(Date()): \(message)\n"
+        if let data = entry.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logURL.path) {
+                if let handle = try? FileHandle(forWritingTo: logURL) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                try? data.write(to: logURL)
+            }
         }
     }
     
