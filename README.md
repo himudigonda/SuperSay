@@ -14,120 +14,57 @@
 ![SwiftUI](https://img.shields.io/badge/SwiftUI-5.0-F05138?style=for-the-badge&logo=swift&logoColor=white)
 ![TTS Engine](https://img.shields.io/badge/TTS_Engine-Kokoro--82M-blueviolet?style=for-the-badge)
 ![Model Format](https://img.shields.io/badge/Model_Format-ONNX-00529B?style=for-the-badge&logo=onnx&logoColor=white)
-![Backend](https://img.shields.io/badge/Backend-FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-[![CodSpeed](https://img.shields.io/badge/CodSpeed-Performance-FF6B35?style=for-the-badge)](https://codspeed.io/himudigonda/SuperSay?utm_source=badge)
-![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
-![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge)
 
-**SuperSay** is a professional-grade text-to-speech utility for macOS. Unlike standard accessibility tools, SuperSay focuses on **audio fidelity** and **system integration**. It uses the state-of-the-art [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) model running locally to generate human-like speech while intelligently managing your system's audio environment (ducking music, pausing for phone calls).
+**SuperSay** is a professional-grade text-to-speech utility for macOS. It runs the state-of-the-art [Kokoro](https://huggingface.co/hexgrad/Kokoro-82M) model locally on your device to generate human-like speech.
 
 ---
 
-## ✨ Why SuperSay?
+## ✨ Key Features
 
-* **🔒 Local & Private**: 100% offline inference. No data is ever sent to the cloud.
-* **🎬 Cinematic Audio Engine**: Automatically "ducks" (lowers) Spotify or Apple Music volume smoothly while speaking, then fades it back in.
-* **🧠 Parallel Processing**: Splits long articles into chunks and generates audio in parallel for instant playback.
-* **🔌 Binary Patching**: Manually reconstructs WAV headers to stitch audio chunks into a single seamless track.
-* **📦 The Vault**: A searchable history of everything you've listened to.
+*   **🔒 100% Offline & Private**: No data leaves your Mac. The AI model runs locally on your Apple Silicon chip.
+*   **🎓 Academic Mode**: A specialized engine for reading research papers. It automatically strips citations, merges hyphenated words, and removes repetitive headers/footers for a smooth listening experience.
+*   **⚡️ Zero-Latency Streaming**: Audio starts playing instantly via a hardware-synced producer-consumer pipeline. No waiting for long documents to render.
+*   **🎬 Cinematic Audio Engine**: Intelligently "ducks" your Music or Spotify volume while speaking and fades it back in when done.
+*   **📦 Searchable History**: Revisit anything you've listened to in "The Vault".
 
-## 🏗️ Architecture
+## 🏗️ Architecture (Zipped Deployment)
 
-SuperSay operates on a **Producer-Consumer** model using Inter-Process Communication (IPC).
+SuperSay uses a unique **Self-Extracting Sidecar** architecture to be distribution-friendly.
 
-```mermaid
-graph LR
-    A[macOS Frontend] -->|JSON Request| B(Local Python Server)
-    B -->|Inference| C{Kokoro ONNX}
-    C -->|Raw PCM| B
-    B -->|WAV Chunk| A
-    A -->|Binary Stitching| D[Audio Engine]
-    D -->|Playback| E[Speakers]
-```
+1.  **Build**: The Python backend + AI Models are compiled and Zipped into the app bundle.
+2.  **Launch**: On first run, the app extracts the engine to `~/Library/Application Support/`.
+3.  **Run**: The Swift frontend communicates with this local engine via high-speed HTTP streaming.
 
-* **Frontend**: Native SwiftUI app handling system events, global hotkeys, and audio session management.
-* **Backend**: A lightweight FastAPI server wrapping the ONNX runtime for high-performance inference.
-
-### ⚡ Fast-Track Development
-
-We use a **Makefile** to automate the entire build pipeline.
-
-```bash
-# Builds backend, compiles app, and launches it in one command
-make run
-```
+[**Read the Architecture Deep Dive ->**](docs/architecture.md)
 
 ## 🚀 Quick Start
 
-### Prerequisites
-
-* macOS 14.0 (Sonoma) or later
-* Xcode 15+
-* Python 3.11+ (We recommend [uv](https://github.com/astral-sh/uv))
-
 ### Installation
 
-1. **Clone the Repo**
+**Option 1: Download Release**
+Grab the latest `.dmg` from the [Releases Page](https://github.com/himudigonda/SuperSay/releases).
 
-```bash
-git clone https://github.com/himudigonda/SuperSay.git
-cd SuperSay
-```
+**Option 2: Build from Source**
 
-2. **Setup the Backend**
+1.  **Clone**:
+    ```bash
+    git clone https://github.com/himudigonda/SuperSay.git
+    cd SuperSay
+    ```
 
-```bash
-cd backend
-uv sync
-# Download models (See backend/README.md)
-```
-
-3. **Run the App**
-
-* Open `frontend/SuperSay/SuperSay.xcodeproj` in Xcode.
-* Build & Run (Cmd+R).
+2.  **Build**:
+    ```bash
+    # This automates dependency setup, backend compilation, and app packaging
+    make run
+    ```
 
 ## 📚 Documentation
 
-* [**Architecture Deep Dive**](docs/architecture.md): How the Swift-Python bridge works.
-* [**Feature Roadmap**](docs/ROADMAP.md): What's coming next.
-* [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and best practices.
-* [**Release Maintenance**](docs/release.md): How to create tags and GH releases.
-* [**Backend Details**](backend/README.md): API and Model technicals.
-* [**Frontend Details**](frontend/README.md): SwiftUI architecture.
-* [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
-
-## 👩💻 For Developers
-
-SuperSay includes a robust automation pipeline for code quality and building.
-
-### 🛠️ The One-Click Workflow
-
-We use a **Makefile** to automate the entire lifecycle.
-
-| Command | Action |
-| :--- | :--- |
-| `make setup` | Installs Python dependencies (uv) and checks Xcode. |
-| `make lint` | Runs **Ruff** (Python) and **SwiftLint** to enforce style. |
-| `make test` | Runs **Pytest** suites on the inference engine. |
-| `make build-backend` | Compiles the Python AI engine into a standalone binary. |
-| `make dmg` | Builds the full macOS app and wraps it in a `.dmg` installer. |
-
-### 📊 Website-Backed Analytics
-
-SuperSay includes an optional analytics module to help us track overall product health and growth.
-
-* **Collected Data:** App Launches, Total Characters Read, Audio Export Counts. **No text content is ever collected.**
-* **Privacy:** All data is sent to a centralized endpoint (`https://himudigonda.me/api/telemetry`) keyed by a unique, anonymous ID. Users can opt-out in **Preferences**.
-* **Transparency:** The service implementation is fully open-source in `MetricsService.swift`.
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](docs/CONTRIBUTING.md) for details on how to set up your development environment and submit Pull Requests.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+*   [**Architecture Deep Dive**](docs/architecture.md): How the Producer-Consumer streaming works.
+*   [**User Guide**](docs/USER_GUIDE.md): Keyboard shortcuts and features.
+*   [**Backend Details**](backend/README.md): API and Model technicals.
+*   [**Frontend Details**](frontend/README.md): SwiftUI architecture.
+*   [**Contributing**](docs/CONTRIBUTING.md): How to build and submit PRs.
 
 ---
 <p align="center">Made with ❤️ for the macOS Community</p>

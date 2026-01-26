@@ -62,13 +62,17 @@ class AudioService: NSObject, ObservableObject {
         if !hasStrippedHeader {
             headerAccumulator.append(dataToProcess)
             if headerAccumulator.count >= 44 {
-                dataToProcess = headerAccumulator.advanced(by: 44)
+                // Take only the data AFTER the 44-byte header
+                dataToProcess = headerAccumulator.suffix(from: 44)
                 hasStrippedHeader = true
                 headerAccumulator = Data()
+                print("🔊 AudioService: Header stripped, streaming started.")
             } else {
-                return
+                return // Keep accumulating
             }
         }
+        
+        if dataToProcess.isEmpty { return }
         
         pcmAccumulator.append(dataToProcess)
         let bytesToProcess = (pcmAccumulator.count / 2) * 2

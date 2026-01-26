@@ -51,7 +51,10 @@ struct SuperSayApp: App {
     }
     
     private func registerCustomFonts() {
-        let fontFolder = Bundle.main.bundleURL.appendingPathComponent("Contents/Resources/Fonts")
+        guard let fontFolder = Bundle.main.resourceURL?.appendingPathComponent("Fonts") else {
+            print("📝 FontLoader: Could not locate Fonts directory in bundle.")
+            return
+        }
         guard let files = try? FileManager.default.contentsOfDirectory(at: fontFolder, includingPropertiesForKeys: nil) else {
             print("📝 FontLoader: No bundled fonts found or directory inaccessible.")
             return

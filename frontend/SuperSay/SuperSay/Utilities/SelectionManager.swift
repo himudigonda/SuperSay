@@ -2,7 +2,7 @@ import AppKit
 
 struct SelectionManager {
     static func getSelectedText() -> String? {
-        // 1. Try Accessibility API first (Cleanest method)
+        // 1. Try Accessibility API
         let systemWideElement = AXUIElementCreateSystemWide()
         var focusedElement: AnyObject?
         
@@ -13,14 +13,12 @@ struct SelectionManager {
             let textResult = AXUIElementCopyAttributeValue(focusedElement as! AXUIElement, kAXSelectedTextAttribute as CFString, &selectedText)
             
             if textResult == .success, let text = selectedText as? String, !text.isEmpty {
-                print("✅ SelectionManager: Found text via AX (\(text.count) chars)")
+                print("✅ SelectionManager: Found text via AX")
                 return text.trimmingCharacters(in: .whitespacesAndNewlines)
-            } else {
-                print("⚠️ SelectionManager: AX failed (Error: \(textResult.rawValue)). Attempting Clipboard Fallback...")
             }
         }
         
-        // 2. Fallback: Clipboard Simulation (Cmd+C)
+        print("⚠️ SelectionManager: AX failed. Falling back to Clipboard (Cmd+C)...")
         return getSelectedTextViaClipboard()
     }
     
@@ -28,27 +26,34 @@ struct SelectionManager {
         let pasteboard = NSPasteboard.general
         let oldChangeCount = pasteboard.changeCount
         
-        // Simulate Cmd+C
-        let source = CGEventSource(stateID: .hidSystemState)
-        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: true) // kVK_Command
-        let cDown = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: true)   // kVK_ANSI_C
-        let cUp = CGEvent(keyboardEventSource: source, virtualKey: 0x08, keyDown: false)
-        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: 0x37, keyDown: false)
+        // Use the 'annotated' source to ensure macOS sees this as a legitimate user-driven event
+        guard let source = CGEventSource(stateID: .combinedSessionState) else { return nil }
+        
+        let cmdKey: CGKeyCode = 0x37
+        let cKey: CGKeyCode = 0x08
+        
+        let cmdDown = CGEvent(keyboardEventSource: source, virtualKey: cmdKey, keyDown: true)
+        let cDown = CGEvent(keyboardEventSource: source, virtualKey: cKey, keyDown: true)
+        let cUp = CGEvent(keyboardEventSource: source, virtualKey: cKey, keyDown: false)
+        let cmdUp = CGEvent(keyboardEventSource: source, virtualKey: cmdKey, keyDown: false)
         
         cmdDown?.flags = .maskCommand
         cDown?.flags = .maskCommand
         cUp?.flags = .maskCommand
+        cmdUp?.flags = .maskCommand // Cmd should stay up at the end
         
+        // Post events
         cmdDown?.post(tap: .cghidEventTap)
         cDown?.post(tap: .cghidEventTap)
         cUp?.post(tap: .cghidEventTap)
         cmdUp?.post(tap: .cghidEventTap)
         
-        // Wait briefly for clipboard to update (50ms)
-        Thread.sleep(forTimeInterval: 0.05)
+        // Wait for the OS to process the copy command
+        // Increased to 250ms for reliability with heavy apps like Chrome
+        Thread.sleep(forTimeInterval: 0.25)
         
-        if pasteboard.changeCount != oldChangeCount, let text = pasteboard.string(forType: .string), !text.isEmpty {
-            print("✅ SelectionManager: Found text via Clipboard Fallback")
+        if pasteboard.changeCount != oldChangeCount, 
+           let text = pasteboard.string(forType: .string), !text.isEmpty {
             return text.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         

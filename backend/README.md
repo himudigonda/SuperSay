@@ -1,26 +1,35 @@
 # SuperSay Backend (Python)
 
-The inference engine powering SuperSay. Built with **FastAPI** and **ONNX Runtime**.
+The high-performance inference engine powering SuperSay. Built with **FastAPI**, **ONNX Runtime**, and **Kokoro-82M**.
 
-## 🛠️ Setup
+## 🚀 Streaming Architecture
 
-We recommend using [uv](https://github.com/astral-sh/uv) for lightning-fast dependency management.
+Unlike traditional TTS APIs that return a single file, this backend is an **Async Generator**.
+
+1.  **Sentence Splitting**: Regex is used to split long text into semantic sentences.
+2.  **Streaming Inference**: As each sentence is processed by `kokoro-v1.0.onnx`, audio bytes are yielded *immediately* to the HTTP stream.
+3.  **No Blocking**: This allows the frontend to start playing audio ~200ms after the request is sent, regardless of total text length.
+
+## 📦 Compilation (PyInstaller)
+
+To ship this as a standalone macOS app component, we compile it into a single binary distribution.
 
 ```bash
-# 1. Install dependencies
-uv sync
-
-# 2. Download Models (Required)
-# Place these in the backend/ root
-# - kokoro-v1.0.onnx
-# - voices-v1.0.bin
+# Compile and Zip
+./scripts/compile_backend.sh
 ```
+
+This script:
+1.  Bundles the python interpreter and dependencies.
+2.  Includes `kokoro-v1.0.onnx` and `voices-v1.0.bin`.
+3.  Embeds a portable `espeak-ng` binary for phonemizer support.
+4.  Produces `SuperSayServer.zip` which is injected into the Xcode project.
 
 ## 🔌 API Reference
 
-### `POST /speak`
+### `POST /speak` (Streaming)
 
-Generates audio from text.
+Generates audio stream from text.
 
 **Payload:**
 ```json
@@ -28,14 +37,13 @@ Generates audio from text.
   "text": "Hello world",
   "voice": "af_bella",
   "speed": 1.0,
-  "volume": 1.0
+  "volume": 0.8
 }
 ```
 
 **Response:**
-*   `200 OK`: `audio/wav` binary stream.
-*   `500 Error`: Text too long or model failure.
+*   `200 OK`: `chunked` transfer encoding (WAV/PCM stream).
 
 ### `GET /health`
 
-Used by the Swift frontend to check if the server is ready to accept requests.
+Used by `LaunchManager` to verify the server is active and the model is loaded in memory.

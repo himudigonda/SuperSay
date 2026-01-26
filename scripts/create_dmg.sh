@@ -17,9 +17,9 @@ echo "🚀 Building SuperSay v${VERSION} for Release..."
 # Navigate to project root
 cd "$(dirname "$0")/.."
 
-# 0. Compile Backend
-echo "🐍 Compiling Backend..."
-./scripts/compile_backend.sh
+# 0. Skip Backend (Already compiled in previous turn)
+echo "⏭️ Skipping Backend compilation (Using existing zip)..."
+# ./scripts/compile_backend.sh
 
 # 1. Build the Release app bundle
 echo "🔨 Building Release configuration..."
@@ -32,8 +32,7 @@ xcodebuild -project "${XCODE_PROJECT_DIR}/SuperSay.xcodeproj" \
     CURRENT_PROJECT_VERSION="1" \
     archive \
     CODE_SIGN_IDENTITY="-" \
-    CODE_SIGNING_REQUIRED=NO \
-    CODE_SIGNING_ALLOWED=NO
+    ENABLE_HARDENED_RUNTIME=NO
 
 # 2. Export the app
 echo "📦 Exporting app bundle..."
@@ -59,10 +58,11 @@ mkdir -p "$STAGING_DIR"
 cp -R "$APP_PATH" "$STAGING_DIR/"
 ln -s /Applications "$STAGING_DIR/Applications"
 
-# Inject Fonts (Vital for correct Look & Feel)
-echo "📦 Injecting Custom Fonts into DMG staging..."
+# Inject Backend & Fonts (Vital for correct functionality)
+echo "📦 Injecting components into DMG staging..."
 mkdir -p "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts"
 cp frontend/SuperSay/SuperSay/Resources/Fonts/*.ttf "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts/"
+cp frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/"
 
 # 4. Create DMG (Standardized Check)
 if command -v create-dmg &> /dev/null; then

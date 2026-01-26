@@ -4,6 +4,7 @@ struct SuperSayWindow: View {
     @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var history: HistoryManager
+    @EnvironmentObject var launchManager: LaunchManager
     @Environment(\.colorScheme) var colorScheme
     // @State private var selectedTab: String? = "home" // Managed by VM now
     
@@ -139,7 +140,39 @@ struct SuperSayWindow: View {
         .onAppear {
             // Background check for updates on startup
             vm.checkForUpdates(manual: false)
+            
+            // Prepare backend if needed
+            Task {
+                await launchManager.prepare()
+            }
         }
+        .overlay {
+            if !launchManager.isReady {
+                ZStack {
+                    adaptiveBackdrop
+                    
+                    VStack(spacing: 20) {
+                        if let error = launchManager.error {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .font(.system(size: 40))
+                                .foregroundStyle(.red)
+                            Text("Launch Failed").font(vm.appFont(size: 18, weight: .bold))
+                            Text(error).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal)
+                            
+                            Button("Try Again") {
+                                launchManager.error = nil
+                                Task { await launchManager.prepare() }
+                            }
+                            .buttonStyle(.borderedProminent)
+                        } else {
+                            ProgressView()
+                            Text("Initializing SuperSay...").font(vm.appFont(size: 16, weight: .medium))
+                        }
+                    }
+                }
+            }
+        }
+        .animation(.default, value: launchManager.isReady)
     }
     
     @ViewBuilder

@@ -15,7 +15,7 @@ final class BackendService: NSObject, @unchecked Sendable {
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
     private var continuations: [Int: AsyncStream<Data>.Continuation] = [:]
     
-    // Shared session for streaming
+    // Shared session for streaming this is a
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.default
         config.httpMaximumConnectionsPerHost = 10
@@ -31,28 +31,16 @@ final class BackendService: NSObject, @unchecked Sendable {
         }
         
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let backendFolder = appSupport.appendingPathComponent("SuperSayServer")
-        let executableURL = backendFolder.appendingPathComponent("SuperSayServer")
+        let executableURL = appSupport.appendingPathComponent("SuperSayServer/SuperSayServer")
         
-        if !FileManager.default.fileExists(atPath: executableURL.path) {
-            guard let zipURL = Bundle.main.url(forResource: "SuperSayServer", withExtension: "zip") else {
-                stateQueue.sync { _isLaunching = false }
-                return
-            }
-            
-            do {
-                let unzipProcess = Process()
-                unzipProcess.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-                unzipProcess.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
-                try unzipProcess.run()
-                unzipProcess.waitUntilExit()
-            } catch {
-                stateQueue.sync { _isLaunching = false }
-                return
-            }
+        // Just check if LaunchManager did its job
+        guard FileManager.default.isExecutableFile(atPath: executableURL.path) else {
+            stateQueue.sync { _isLaunching = false }
+            print("❌ Backend binary not ready yet.")
+            return
         }
-        
-        // Clean up any existing instances
+
+        // Kill existing instances
         let cleanup = Process()
         cleanup.launchPath = "/usr/bin/pkill"
         cleanup.arguments = ["-f", "SuperSayServer"]

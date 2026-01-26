@@ -70,7 +70,8 @@ struct UpdateView: View {
                     .font(.system(size: 60))
                     .foregroundStyle(.cyan.gradient)
                     .symbolEffect(.bounce, value: downloader.isDownloading)
-                    .symbolEffect(.rotate, value: isInstalling)
+                    .rotationEffect(.degrees(isInstalling ? 360 : 0))
+                    .animation(isInstalling ? .linear(duration: 2).repeatForever(autoreverses: false) : .default, value: isInstalling)
                 
                 Text(isInstalling ? "Installing Update" : "Update Available")
                     .font(vm.appFont(size: 24, weight: .bold))
