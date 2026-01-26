@@ -66,3 +66,6 @@ frontend/SuperSay/SuperSay/SuperSayServer
 backend/dist/
 backend/build/
 frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
+RELEASE_NOTES.md
+.gitignore
+ship.sh
