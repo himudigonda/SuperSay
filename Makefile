@@ -8,8 +8,9 @@ SCHEME = SuperSay
 CONFIG = Release
 BUILD_DIR = build
 APP_PATH = $(BUILD_DIR)/DerivedData/Build/Products/$(CONFIG)/SuperSay.app
+BUNDLE_ID = com.himudigonda.SuperSay
 
-.PHONY: all setup backend app run clean lint test format
+.PHONY: all setup backend app run clean nuke lint test format
 
 # Default: Run the full pipeline
 all: run
@@ -50,63 +51,63 @@ run: backend app
 	@echo "------------------------------------------------"
 	@echo "🎉 [3/3] Launching SuperSay..."
 	@echo "------------------------------------------------"
-	# Kill existing instance if running
 	pkill -x "SuperSay" || true
-	# Open the newly built app
 	open $(APP_PATH)
+
+# --- 🧹 UTILS (The Nuking Zone) ---
+
+# Standard clean: Wipes all local build artifacts
+clean:
+	@echo "🗑️ Cleaning local artifacts..."
+	rm -rf backend/dist backend/build
+	rm -rf $(BUILD_DIR)
+	rm -rf frontend/SuperSay/DerivedData
+	rm -rf frontend/SuperSay/SuperSay/Resources/SuperSayServer
+	rm -rf frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
+	find . -name "__pycache__" -type d -exec rm -rf {} +
+	@echo "✨ Local build folders cleared."
+
+# The Full Nuke: clean + system-level wipe + permission reset
+nuke: clean
+	@echo "🧨 NUKING SYSTEM DATA..."
+	pkill -9 "SuperSay" || true
+	pkill -9 "SuperSayServer" || true
+	rm -rf ~/Library/Application\ Support/SuperSayServer
+	rm -rf ~/Library/Application\ Support/$(BUNDLE_ID)
+	@echo "🔐 Resetting macOS Accessibility Database..."
+	tccutil reset Accessibility $(BUNDLE_ID) || true
+	@echo "✅ Factory reset complete. Run 'make run' for a truly fresh start."
 
 # --- 🔍 CODE QUALITY ---
 lint:
 	@echo "🧹 Linting Python..."
 	cd backend && uv run ruff check .
 	cd backend && uv run black --check .
-	@echo "🧹 Linting Swift (Requires SwiftLint)..."
-	if which swiftlint >/dev/null; then swiftlint; else echo "⚠️ SwiftLint not installed (brew install swiftlint)"; fi
+	@echo "🧹 Linting Swift..."
+	if which swiftlint >/dev/null; then swiftlint; else echo "⚠️ SwiftLint not installed"; fi
 
 format:
 	@echo "✨ Formatting Python..."
 	cd backend && uv run black .
 
 # --- 🧪 TESTS ---
-
-test: test-backend test-frontend
-	@echo "✅ All tests passed."
-
-test-backend:
+test:
 	@echo "🧪 Testing Backend..."
-	# Run pytest with the new test logic
 	cd backend && uv run pytest -v
-
-test-frontend:
 	@echo "🧪 Testing Frontend..."
-	# Standard Xcode test command to run all unit tests in the main scheme
-	xcodebuild test \
-		-project frontend/SuperSay/SuperSay.xcodeproj \
-		-scheme SuperSay \
-		-destination 'platform=macOS,arch=arm64' 
-	@echo "⚠️ Frontend test execution relies on correctly configured XCTest targets in Xcode."
+	xcodebuild test -project $(PROJECT_PATH) -scheme $(SCHEME) -destination 'platform=macOS,arch=arm64'
 
 # --- 📦 RELEASES ---
-release: clean
+release: nuke
 	@echo "🚀 Starting Full Release Build for v$(VERSION)..."
 	chmod +x scripts/create_dmg.sh
 	./scripts/create_dmg.sh $(VERSION)
 	@echo "✅ Release Ready: build/SuperSay-$(VERSION).dmg"
 
-# --- 🧹 UTILS ---
-clean:
-	@echo "🗑️ Cleaning artifacts..."
-	rm -rf backend/dist backend/build
-	rm -rf $(BUILD_DIR)
-	rm -rf frontend/SuperSay/SuperSay/Resources/SuperSayServer
-
 help:
-	@echo "SuperSay Automation Hub"
-	@echo "Usage: make [target]"
-	@echo ""
-	@echo "Targets:"
-	@echo "  setup           Install dependencies"
-	@echo "  run             Build and launch app"
-	@echo "  test            Run all test suites"
-	@echo "  release VERSION=x.x.x  Build pretty DMG for distribution"
-	@echo "  clean           Wipe build artifacts"
+	@echo "SuperSay Management"
+	@echo "  make clean     Wipe build artifacts"
+	@echo "  make nuke      Complete factory reset (removes permissions/app data)"
+	@echo "  make run       Build and launch fresh"
+	@echo "  make release   Nuke, rebuild, and create distribution DMG"
+	@echo "  make test      Run all test suites"

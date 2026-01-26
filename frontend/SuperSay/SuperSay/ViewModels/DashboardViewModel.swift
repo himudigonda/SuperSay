@@ -58,6 +58,8 @@ class DashboardViewModel: ObservableObject {
         isBackendOnline
     }
 
+    private var currentSpeakTask: Task<Void, Never>?
+
     private var cancellables = Set<AnyCancellable>()
     
     init(backend: BackendService, system: SystemService, audio: AudioService, history: HistoryManager) {
@@ -118,39 +120,43 @@ class DashboardViewModel: ObservableObject {
     }
     
     func speak(text: String) async {
-        print("DEBUG [DashboardVM] speak() called with text: \"\(text)\"")
-        status = .thinking
+        // --- FIX: Cancel the previous stream task if it exists ---
+        currentSpeakTask?.cancel()
         
-        let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
-        print("DEBUG [DashboardVM] Sanitized text: \"\(cleaned)\"")
-        audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
-        
-        print("DEBUG [DashboardVM] Sending full text stream...")
-        audio.prepareForStream()
-        
-        let stream = backend.streamAudio(
-            text: cleaned,
-            voice: selectedVoice,
-            speed: speechSpeed,
-            volume: speechVolume
-        )
+        currentSpeakTask = Task {
+            print("DEBUG [DashboardVM] Starting new speak task")
+            status = .thinking
             
-        // 3. Playback Loop
-        print("DEBUG [DashboardVM] Starting chunk consumption loop...")
-        var totalChunks = 0
-        for await chunk in stream {
-            totalChunks += 1
-            if status == .thinking {
-                status = .speaking
+            let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
+            audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
+            
+            // This resets the AudioService buffers
+            audio.prepareForStream()
+            
+            let stream = backend.streamAudio(
+                text: cleaned,
+                voice: selectedVoice,
+                speed: speechSpeed,
+                volume: speechVolume
+            )
+                
+            for await chunk in stream {
+                // Check if this task was cancelled while we were waiting for a chunk
+                if Task.isCancelled { 
+                    print("DEBUG [DashboardVM] Task cancelled, exiting loop")
+                    return 
+                }
+                
+                if status == .thinking { status = .speaking }
+                audio.playChunk(chunk, volume: Float(speechVolume))
             }
-            audio.playChunk(chunk, volume: Float(speechVolume))
+            
+            if !Task.isCancelled {
+                audio.finishStream()
+                history.log(text: cleaned, voice: selectedVoice)
+                MetricsService.shared.trackGeneration(charCount: cleaned.count)
+            }
         }
-        print("DEBUG [DashboardVM] Loop finished. Received \(totalChunks) chunks.")
-        
-        audio.finishStream()
-        print("🎬 DashboardViewModel: Total stream finished")
-        history.log(text: cleaned, voice: selectedVoice)
-        MetricsService.shared.trackGeneration(charCount: cleaned.count)
     }
     
     private func splitIntoSentences(_ text: String) -> [String] {

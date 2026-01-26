@@ -32,9 +32,9 @@ async def test_tts_engine_sentence_splitting():
             chunks.append(chunk)
 
         # "Hello world." "This is a test!" "Does it work?"
-        # Each yields audio + a trailing silence
-        # Total chunks = 3 audio + 3 silence = 6
-        assert len(chunks) == 6
+        # Each yields ONE atomic chunk (audio + trailing silence)
+        # Total chunks = 3
+        assert len(chunks) == 3
         assert mock_model.create.call_count == 3
 
 
@@ -45,8 +45,8 @@ async def test_tts_engine_empty_text():
         chunks = []
         async for chunk in gen:
             chunks.append(chunk)
-        # Yields 1 audio chunk + 1 trailing silence
-        assert len(chunks) == 2
+        # Yields 0 chunks for empty text
+        assert len(chunks) == 0
 
 
 @pytest.mark.asyncio

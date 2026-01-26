@@ -49,8 +49,8 @@ struct SelectionManager {
         cmdUp?.post(tap: .cghidEventTap)
         
         // Wait for the OS to process the copy command
-        // Increased to 250ms for reliability with heavy apps like Chrome
-        Thread.sleep(forTimeInterval: 0.25)
+        // Increased to 400ms for reliability with heavy apps like Chrome
+        Thread.sleep(forTimeInterval: 0.4)
         
         if pasteboard.changeCount != oldChangeCount, 
            let text = pasteboard.string(forType: .string), !text.isEmpty {

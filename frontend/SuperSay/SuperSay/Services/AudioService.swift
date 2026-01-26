@@ -1,6 +1,5 @@
 import AVFoundation
 import Combine
-import UserNotifications
 import AppKit
 
 @MainActor
@@ -11,29 +10,25 @@ class AudioService: NSObject, ObservableObject {
     @Published var duration: TimeInterval = 0
     @Published var isDragging = false
     
-    // Audio Engine
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: false)!
     
-    private var timer: AnyCancellable?
     private var lastAudioData = Data()
+    private var headerAccumulator = Data()
+    private var pcmAccumulator = Data()
+    private var hasStrippedHeader = false
+    private var isStreamActive = false
+    private var hasStartedPlayback = false
+    private var scheduledBufferCount = 0
+    
+    // Timer for progress
+    private var timer: AnyCancellable?
     private var startTime: Date?
     private var pausedTime: TimeInterval = 0
     
-    // Streaming state
-    private var headerAccumulator = Data()
-    private var hasStrippedHeader = false
-    private var isStreamActive = false
-    private var pcmAccumulator = Data()
-    private var hasStartedPlayback = false
-    
-    // CRITICAL: Robust Completion Tracking
-    private var scheduledBufferCount = 0
-    
-    // Durations
+    // For duration estimation
     private var estimatedDuration: TimeInterval = 0
-    private var actualDataDuration: TimeInterval = 0
     
     override init() {
         super.init()
@@ -49,61 +44,65 @@ class AudioService: NSObject, ObservableObject {
             print("❌ AudioService: Engine start error: \(error)")
         }
     }
-    
+
     func setEstimatedDuration(textLength: Int, speed: Double) {
         let rawSeconds = Double(textLength) / 12.0
         self.estimatedDuration = max(1.0, rawSeconds / speed)
         self.duration = self.estimatedDuration
     }
-    
+
     func playChunk(_ data: Data, volume: Float) {
         var dataToProcess = data
         
+        // 1. Strip Header
         if !hasStrippedHeader {
             headerAccumulator.append(dataToProcess)
             if headerAccumulator.count >= 44 {
-                // Take only the data AFTER the 44-byte header
                 dataToProcess = headerAccumulator.suffix(from: 44)
                 hasStrippedHeader = true
                 headerAccumulator = Data()
-                print("🔊 AudioService: Header stripped, streaming started.")
+                print("🔊 AudioService: Header stripped. PCM accumulation started.")
             } else {
-                return // Keep accumulating
+                return 
             }
         }
         
         if dataToProcess.isEmpty { return }
         
+        // 2. PCM Accumulation with Alignment Fix
         pcmAccumulator.append(dataToProcess)
-        let bytesToProcess = (pcmAccumulator.count / 2) * 2
+        
+        // --- FIX: Only process full 2-byte samples ---
+        let totalAvailable = pcmAccumulator.count
+        let bytesToProcess = (totalAvailable / 2) * 2 // Force even number
+        
         guard bytesToProcess > 0 else { return }
         
         let chunkToBuffer = pcmAccumulator.prefix(bytesToProcess)
-        pcmAccumulator.removeFirst(bytesToProcess)
-        lastAudioData.append(chunkToBuffer)
+        pcmAccumulator.removeFirst(bytesToProcess) // Keep the leftover byte if it was odd
         
-        self.actualDataDuration = Double(lastAudioData.count / 2) / 24000.0
-        self.duration = max(self.estimatedDuration, self.actualDataDuration)
+        // 3. Scheduling
+        lastAudioData.append(chunkToBuffer)
+        let actualDataDuration = Double(lastAudioData.count / 2) / 24000.0
+        self.duration = max(self.estimatedDuration, actualDataDuration)
         
         if !isDragging {
             guard let buffer = dataToBuffer(chunkToBuffer) else { return }
             playerNode.volume = volume
             
-            // TRACK SCHEDULED BUFFERS
             self.scheduledBufferCount += 1
             playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
                 Task { @MainActor [weak self] in
                     guard let self = self else { return }
                     self.scheduledBufferCount -= 1
-                    // Only check for stop if the stream is totally finished
                     if !self.isStreamActive && self.scheduledBufferCount == 0 && self.isPlaying {
-                         print("🎬 AudioService: All scheduled buffers finished. Stopping.")
                          self.stop()
                     }
                 }
             })
             
-            if !hasStartedPlayback && lastAudioData.count > 4800 { // Increased buffer to 200ms for safety
+            // Start playback after a tiny safety buffer (250ms = 12000 bytes)
+            if !hasStartedPlayback && lastAudioData.count > 12000 {
                 startPlayback()
             }
         }
@@ -122,7 +121,7 @@ class AudioService: NSObject, ObservableObject {
             print("❌ AudioService: Start error: \(error)")
         }
     }
-    
+
     private func startTimer() {
         timer?.cancel()
         timer = Timer.publish(every: 0.1, on: .main, in: .common)
@@ -136,41 +135,7 @@ class AudioService: NSObject, ObservableObject {
                 }
             }
     }
-    
-    func seek(to percentage: Double) {
-        guard !lastAudioData.isEmpty else { return }
-        playerNode.stop()
-        self.scheduledBufferCount = 0 // Clear count
-        
-        let targetTime = percentage * duration
-        let targetSample = Int(targetTime * 24000)
-        var targetByte = targetSample * 2
-        
-        if targetByte >= lastAudioData.count { targetByte = lastAudioData.count - 2 }
-        if targetByte < 0 { targetByte = 0 }
-        if targetByte % 2 != 0 { targetByte -= 1 }
-        
-        let remainingData = lastAudioData.advanced(by: targetByte)
-        if let buffer = dataToBuffer(remainingData) {
-            self.scheduledBufferCount += 1
-            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
-                Task { @MainActor [weak self] in
-                    self?.scheduledBufferCount -= 1
-                }
-            })
-            
-            let now = Date()
-            self.pausedTime = targetTime
-            self.startTime = now
-            self.currentTime = targetTime
-            
-            if !engine.isRunning { try? engine.start() }
-            playerNode.play()
-            isPlaying = true
-            startTimer()
-        }
-    }
-    
+
     func togglePause() {
         if playerNode.isPlaying {
             playerNode.pause()
@@ -187,7 +152,41 @@ class AudioService: NSObject, ObservableObject {
             startTimer()
         }
     }
-    
+
+    func seek(to percentage: Double) {
+        guard !lastAudioData.isEmpty else { return }
+        playerNode.stop()
+        self.scheduledBufferCount = 0
+        
+        let targetTime = percentage * duration
+        let targetSample = Int(targetTime * 24000)
+        var targetByte = targetSample * 2
+        
+        if targetByte >= lastAudioData.count { targetByte = lastAudioData.count - 2 }
+        if targetByte < 0 { targetByte = 0 }
+        if targetByte % 2 != 0 { targetByte -= 1 }
+        
+        let remainingData = lastAudioData.advanced(by: targetByte)
+        if let buffer = dataToBuffer(remainingData) {
+            self.scheduledBufferCount += 1
+            playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
+                Task { @MainActor in
+                    self?.scheduledBufferCount -= 1
+                }
+            })
+            
+            let now = Date()
+            self.pausedTime = targetTime
+            self.startTime = now
+            self.currentTime = targetTime
+            
+            if !engine.isRunning { try? engine.start() }
+            playerNode.play()
+            isPlaying = true
+            startTimer()
+        }
+    }
+
     func prepareForStream() {
         stop()
         isStreamActive = true
@@ -195,10 +194,11 @@ class AudioService: NSObject, ObservableObject {
     
     func finishStream() {
         isStreamActive = false
-        // Check if we already finished (sometimes stream closes after playback is done)
-        if scheduledBufferCount == 0 && isPlaying {
-            stop()
+        // Final flush of remaining data
+        if pcmAccumulator.count > 0 {
+            playChunk(Data(), volume: playerNode.volume)
         }
+        if scheduledBufferCount == 0 && isPlaying { stop() }
     }
     
     func stop() {
@@ -209,26 +209,24 @@ class AudioService: NSObject, ObservableObject {
         currentTime = 0
         pausedTime = 0
         startTime = nil
-        lastAudioData = Data()
-        hasStrippedHeader = false
-        isStreamActive = false
-        pcmAccumulator = Data()
         hasStartedPlayback = false
+        isStreamActive = false
+        hasStrippedHeader = false
+        scheduledBufferCount = 0
+        lastAudioData = Data()
+        pcmAccumulator = Data()
         headerAccumulator = Data()
         estimatedDuration = 0
-        actualDataDuration = 0
         duration = 0
-        scheduledBufferCount = 0
     }
     
     private func dataToBuffer(_ data: Data) -> AVAudioPCMBuffer? {
-        let frameCount = UInt32(data.count) / 2 // 16-bit
+        let frameCount = UInt32(data.count) / 2
         guard frameCount > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
         buffer.frameLength = frameCount
-        data.withUnsafeBytes { rawBufferPointer in
-            if let baseAddress = rawBufferPointer.baseAddress, let audioBuffer = buffer.int16ChannelData?[0] {
-                let dataPointer = baseAddress.assumingMemoryBound(to: Int16.self)
-                for i in 0..<Int(frameCount) { audioBuffer[i] = dataPointer[i] }
+        data.withUnsafeBytes { ptr in
+            if let base = ptr.baseAddress?.assumingMemoryBound(to: Int16.self), let channel = buffer.int16ChannelData?[0] {
+                for i in 0..<Int(frameCount) { channel[i] = base[i] }
             }
         }
         return buffer
