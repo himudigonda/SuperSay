@@ -264,7 +264,7 @@ class DashboardViewModel: ObservableObject {
     }
     func exportLogs() {
         Task {
-            await backend.exportLogs()
+            backend.exportLogs()
         }
     }
 }

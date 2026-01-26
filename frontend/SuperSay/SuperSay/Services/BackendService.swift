@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AppKit
 
 /// A thread-safe service to manage the Python backend process and handle streaming requests.
 final class BackendService: NSObject, @unchecked Sendable {
@@ -30,7 +31,10 @@ final class BackendService: NSObject, @unchecked Sendable {
             _isLaunching = true
         }
         
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
+        try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
+        
         let executableURL = appSupport.appendingPathComponent("SuperSayServer/SuperSayServer")
         
         // Just check if LaunchManager did its job
@@ -104,11 +108,28 @@ final class BackendService: NSObject, @unchecked Sendable {
     }
     
     func exportLogs() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let logURL = appSupport.appendingPathComponent("backend.log")
-        let desktop = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0].appendingPathComponent("SuperSay_Backend_Log.txt")
-        try? FileManager.default.removeItem(at: desktop)
-        try? FileManager.default.copyItem(at: logURL, to: desktop)
+        let fileManager = FileManager.default
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        let appSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
+        let desktop = fileManager.urls(for: .desktopDirectory, in: .userDomainMask)[0]
+        
+        let logsToExport = ["backend.log", "frontend.log"]
+        let timestamp = Int(Date().timeIntervalSince1970)
+        
+        for logName in logsToExport {
+            let sourceURL = appSupport.appendingPathComponent(logName)
+            let destinationURL = desktop.appendingPathComponent("SuperSay_\(logName)_\(timestamp).txt")
+            
+            if fileManager.fileExists(atPath: sourceURL.path) {
+                try? fileManager.copyItem(at: sourceURL, to: destinationURL)
+                print("✅ Exported \(logName) to Desktop")
+            } else {
+                print("⚠️ Could not find \(logName) at \(sourceURL.path)")
+            }
+        }
+        
+        // Show in Finder
+        NSWorkspace.shared.activateFileViewerSelecting([desktop])
     }
     
     func checkHealth() async -> Bool {

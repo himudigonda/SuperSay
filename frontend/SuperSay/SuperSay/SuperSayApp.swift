@@ -17,6 +17,24 @@ struct SuperSayApp: App {
     private let backend: BackendService
     
     init() {
+        // 1. REDIRECT FRONTEND LOGS TO FILE
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
+        
+        // Ensure directory exists
+        try? FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
+        
+        let logURL = appSupport.appendingPathComponent("frontend.log")
+        
+        // Clear old log
+        try? "".write(to: logURL, atomically: true, encoding: .utf8)
+        
+        // Redirect stdout and stderr to the log file
+        freopen(logURL.path, "a+", stdout)
+        freopen(logURL.path, "a+", stderr)
+        
+        print("--- SuperSay Frontend Log Started: \(Date()) ---")
+        
         // Create instances
         let audioInstance = AudioService()
         let historyInstance = HistoryManager()

@@ -4,11 +4,17 @@ import Combine
 class HistoryManager: ObservableObject {
     @Published var history: [HistoryEntry] = []
     
-    private let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent("history.json")
+    private var url: URL {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(bundleID)
+            .appendingPathComponent("history.json")
+    }
     
     init() {
         // Ensure directory exists
-        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         loadHistory()
     }
