@@ -1,68 +1,91 @@
 # 🏗️ System Architecture
 
-SuperSay is a hybrid application combining the native fluidity of **SwiftUI** with the machine learning ecosystem of **Python**.
+SuperSay uses a hybrid architecture: a high-performance **Python/ONNX** inference engine wrapped in a native **SwiftUI** macOS shell.
 
-## 🧠 The Producer-Consumer Model (Zero Latency)
-
-Traditional text-to-speech apps wait for the entire audio file to be generated before playing. This causes awkward pauses. SuperSay uses a **Producer-Consumer** architecture to achieve "instant" playback.
-
-### 1. The Producer (Python Backend)
-The backend (`App/services/tts.py`) is an **Async Generator**. It does NOT generate a single WAV file. Instead:
-1.  It receives the full text.
-2.  It splits the text into semantic chunks (sentences).
-3.  As soon as **Sentence 1** is inferred (in milliseconds), it is yielded immediately as a binary chunk.
-4.  It proceeds to Sentence 2 while sentence 1 is being transmitted.
-
-### 2. The Consumer (Swift Frontend)
-The frontend (`AudioService.swift`) implements a hardware-synced **Audio Queue**:
-1.  **Buffering**: It receives the first chunk from the API stream.
-2.  **Instant Play**: It immediately schedules this chunk on the `AVAudioEngine` player node.
-3.  **Completion Handlers**: It attaches a hardware callback to the end of the buffer. *Only* when the hardware signals "I am finished playing buffer A" does the logic trigger the next state or finish the session.
-
-This ensures seamless, gapless playback even if the network or inference slows down slightly.
+### Parallel Execution Flow
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Swift as macOS App (Swift)
-    participant Python as Inference Engine (Python)
+    autonumber
+    participant UI as SwiftUI (Main Thread)
+    participant AS as AudioService (Swift)
+    participant AE as AVAudioEngine (Hardware)
+    participant API as FastAPI (Worker Thread)
+    participant PI as Parallel Inference (Asyncio)
+    participant ONNX as Kokoro ONNX
 
-    User->>Swift: Selects Text & Hits Play
-    Swift->>Python: POST /speak (Stream Request)
+    UI->>AS: User: Cmd+Shift+. (Text Selection)
+    AS->>API: HTTP POST /speak { text: "...", speed: 1.0 }
     
-    loop Streaming Response
-        Python->>Python: Infer Sentence N
-        Python-->>Swift: Yield WAV Chunk (Sentence N)
-        Swift->>Swift: Enqueue Buffer
-        Swift->>User: Play Audio (Instant)
+    Note over API,PI: Initialization & Sentence Splitting
+    
+    rect rgb(240, 240, 240)
+        Note right of PI: Parallel Inference Pool starts
+        par Inference: Sentence 1
+            PI->>ONNX: Generate PCM 1
+        and Inference: Sentence 2
+            PI->>ONNX: Generate PCM 2
+        and Inference: Sentence 3
+            PI->>ONNX: Generate PCM 3
+        end
     end
+
+    ONNX-->>PI: PCM 1 Ready
+    PI-->>API: Yield S1 (Chunked Response)
+    API-->>AS: Stream: Binary [44B WAV HDR + PCM 1]
+    AS->>AE: scheduleBuffer(PCM 1)
+    AE-->>AS: Playback Started (S1)
     
-    Python-->>Swift: End of Stream
-    Swift->>Swift: Wait for Player Completion
-    Swift->>User: Release Music Ducking
+    Note over UI,AE: ⚡️ Instant Audio (<200ms latency)
+
+    ONNX-->>PI: PCM 2 Ready
+    PI-->>API: Yield S2 
+    API-->>AS: Stream: Binary [PCM 2]
+    AS->>AE: scheduleBuffer(PCM 2)
+
+    rect rgb(255, 245, 230)
+        Note over AS,AE: [S1 PLAYING] -- [S2 BUFFERED] -- [S3 INFERRING]
+    end
+
+    AE-->>AS: Callback: PCM 1 Finished
+    AS->>UI: Highlight "Sentence 1 Done"
+    
+    Note over AE: Seamless Transition to S2
 ```
 
-## 📦 Zero-Dependency Deployment (The Zipped Backend)
+## 🧠 The Zero-Latency Pipeline
 
-To make the app portable (drag-and-drop install) without requiring the user to install Python, we use a novel **Self-Extracting Bundle** strategy.
+The core innovation of SuperSay is the **Parallel Inference Stream**. Traditional TTS apps generate a whole file before playing. SuperSay treats audio as a real-time stream.
 
-### Build Time
-1.  We use `PyInstaller` to compile the Python environment, `espeak-ng` binary, ONNX models, and dependencies into a single folder.
-2.  This folder is **Zipped** (`SuperSayServer.zip`).
-3.  The Zip is embedded directly into the Swift App Bundle's `Resources/` folder.
+### 1. The Producer (Python Backend)
 
-### Run Time (`LaunchManager`)
-1.  **Launch**: On app startup, `LaunchManager` checks `~/Library/Application Support/SuperSayServer`.
-2.  **Extraction**: If missing, it unzips the embedded backend engine to this user-writable directory.
-3.  **Execution**: It executes the binary from *Application Support*, ensuring full read/write permissions for temp files and logs.
-4.  **Connect**: The Swift app waits for the local `localhost:10101` server to respond to a heartbeat before showing the UI.
+The backend (`backend/app/services/tts.py`) is an `Async Generator`:
 
-This ensures the app is 100% self-contained but can still effectively run a complex Python/ONNX environment on macOS.
+1.  **Sentence Splitting:** It splits input text into semantic chunks using regex.
+2.  **Parallel Tasks:** It fires off ONNX inference tasks for all sentences simultaneously using `asyncio.create_task`.
+3.  **WAV Chunking:** As soon as the first sentence is ready, it yields a 44-byte WAV header followed by raw PCM data.
+4.  **Semantic Gaps:** It injects precise durations of silence between chunks based on punctuation (e.g., 0.8s for periods, 0.4s for commas).
 
-## 🎓 Academic PDF Preprocessing
+### 2. The Consumer (Swift Frontend)
 
-SuperSay includes a specialized pipeline for reading research papers (`PDFService.swift` + `TextProcessor.swift`).
+The frontend (`AudioService.swift`) manages an `AVAudioEngine` player node:
 
-1.  **Statistical Pass**: The engine scans the *entire* document first. It counts line occurrences. Lines appearing on >30% of pages (like "Journal of ML - Vol 3" or page numbers) are identified as artifacts and scrubbed.
-2.  **Smart De-hyphenation**: It detects words split across lines (e.g., `ex-\nample`) and reconstructs them (`example`) to prevent stuttering.
-3.  **Citation Scrubbing**: Regex filters remove bracketed `[12-14]` and parenthetical `(Smith et al., 2020)` citations to improve listening flow.
+1.  **Buffer Management:** It receives binary data via `URLSessionDataDelegate`.
+2.  **Hardware Sync:** Chunks are converted to `AVAudioPCMBuffer` and scheduled.
+3.  **Completion Callbacks:** It uses hardware-level callbacks to track when a buffer has *actually* finished vibrating the speakers, allowing for pixel-perfect UI progress updates.
+
+## 📦 Deployment: The Self-Extracting Bundle
+
+To avoid requiring users to install Python or ONNX:
+
+1.  **PyInstaller:** Compiles the backend into a standalone binary `SuperSayServer`.
+2.  **Zipping:** The binary and models (`kokoro-v1.0.onnx`) are zipped into `SuperSayServer.zip`.
+3.  **LaunchManager:** On first launch, the Swift app extracts this zip to `~/Library/Application Support/SuperSayServer` and manages its lifecycle via `localhost:10101`.
+
+## 🎓 Academic PDF Pipeline
+
+The `PDFService` uses a multi-pass approach for research papers:
+
+-   **Pass 1 (Statistical):** Identifies headers/footers by counting line frequency across pages (lines appearing on >30% of pages are scrubbed).
+-   **Pass 2 (Regex):** Strips IEEE and APA citations.
+-   **Pass 3 (Cleanup):** Reconstructs words split by line-break hyphens.

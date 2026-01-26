@@ -1,22 +1,30 @@
 # Contributing to SuperSay
 
-## 🎯 Current Engineering Goals
-We are specifically looking for Pull Requests in these areas:
+## 🎯 Current Priorities
 
-### 1. Security & Notarization (High Priority)
-Currently, users must manually bypass Gatekeeper. We need a GitHub Action workflow that:
-- Code signs the binary with a Developer ID.
-- Submits the app to Apple's Notarization service (`xcrun altool`).
+We are prioritizing the following engineering tasks:
 
-### 2. Native Audio Taps
-Our current Music Ducking uses AppleScript. This is "hacky" and requires Automation permissions. We want to move to **CoreAudio/AudioKit** to intelligently duck system audio at the buffer level.
+1.  **Code Signing/Notarization:** We need a robust GitHub Action to automate the Apple Developer signing process so users don't have to use `xattr`.
+2.  **Native Audio Taps:** Replacing the current AppleScript-based ducking with native `CoreAudio` or `AudioKit` taps for smoother volume transitions.
+3.  **Model Management:** Moving models out of the app bundle and into an on-demand downloader (CDN) to reduce initial download size.
 
-### 3. Local Model Management
-The 80MB ONNX model is currently zipped inside the app. We want to move to an on-demand downloader that verifies checksums and stores models in `Application Support`.
+## 🛠 Workflow
 
-## 🛠 Development Workflow
-1. **Backend**: Python logic is in `backend/app`. Use `uv` for management.
-2. **Frontend**: SwiftUI logic is in `frontend/SuperSay`.
-3. **The Bridge**: The communication is HTTP Streaming. Do not block the main thread.
+-   **Backend:** Managed by `uv`. Python 3.11+.
+-   **Frontend:** SwiftUI. Minimum target macOS 14.0 (Sonoma).
+-   **Communication:** All communication happens via local HTTP streaming on port `10101`.
 
-Run `make help` to see all available automation commands.
+## 🧪 Testing
+
+Before submitting a PR, ensure all tests pass:
+
+```bash
+# Backend
+cd backend && uv run pytest
+
+# Frontend (Logic)
+# Run via Xcode (Cmd+U) or:
+make test-frontend
+```
+
+Please follow the **Ruff** (Python) and **SwiftLint** (Swift) style guides included in the repository.

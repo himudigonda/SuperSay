@@ -1,29 +1,24 @@
-# 📖 User Guide & Troubleshooting
+# 📖 User Guide
 
-## ⌨️ Global Shortcuts
-| Action | Shortcut |
-| :--- | :--- |
-| **Speak Selection** | `Cmd + Shift + .` |
-| **Play/Pause** | `Cmd + Shift + /` |
-| **Stop** | `Cmd + Shift + ,` |
-| **Export to Desktop** | `Cmd + Shift + M` |
+## 🎧 Optimizing the Listening Experience
+SuperSay is designed for long-form content. For the best experience:
+1.  **Voice Selection:** Use `af_bella` or `af_sarah` for a natural female tone, or `am_michael` for a deep narrative tone.
+2.  **Speed Control:** Most users prefer `1.1x` or `1.2x` for research papers.
+3.  **The Vault:** Every snippet you speak is saved in "The Vault". You can "Star" important sections to build a personalized audio library of insights.
 
 ## 🛠 Troubleshooting
 
-### 1. "Initializing SuperSay..." screen hangs forever
-This happens if the backend server fails to start.
-- Ensure no other app is using port `10101`.
-- Run `pkill -f SuperSayServer` in Terminal and restart.
+### 1. "Initializing SuperSay..." screen hangs
+This means the Swift app cannot talk to the Python backend.
+-   **Check Port:** Ensure no other service is using port `10101`.
+-   **Manual Reset:** Quit the app and run `pkill -f SuperSayServer` in Terminal.
+-   **Check Logs:** Use the "Export Debug Logs" button in Preferences to see if the ONNX model failed to load.
 
-### 2. "Accessibility Access: false" in logs
-If you see this even after granting permission:
-1. Quit SuperSay.
-2. Run `tccutil reset Accessibility com.himudigonda.SuperSay` in Terminal.
-3. Open System Settings > Accessibility.
-4. Manually add SuperSay if it's missing.
+### 2. Text Selection is Grabbing the Wrong Text
+-   Some apps (like older versions of Chrome or Slack) have slow clipboard response times. SuperSay uses a 250ms buffer. If it fails, try clicking inside the window once before using the shortcut.
 
-### 3. Audio clicks or pops
-We use a 50ms cross-fade between sentences. If you hear popping, go to `backend/app/services/audio.py` and increase `duration_sec` in `apply_fade` to `0.08`.
+### 3. Audio Pops or Clicks
+-   SuperSay applies a 50ms linear cross-fade to every sentence. If you hear clicks, the CPU might be throttling. Ensure you are not in "Low Power Mode" on your MacBook.
 
-### 4. Text selection isn't working in Chrome/Slack
-Some apps are slow to respond to copy commands. We use a 250ms delay to wait for the clipboard. If selection still fails, try focusing the window before hitting the shortcut.
+### 4. Apple Music isn't Ducking
+-   Ducking requires **Automation** permissions. If it isn't working, go to **System Settings > Privacy & Security > Automation** and ensure SuperSay has access to "Music" or "Spotify".
