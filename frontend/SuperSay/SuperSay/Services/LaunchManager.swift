@@ -34,7 +34,8 @@ class LaunchManager: ObservableObject {
     }
     
     func prepare() async {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
         let executableURL = appSupport.appendingPathComponent("SuperSayServer/SuperSayServer")
         
         // 1. If binary exists, we are potentially ready
