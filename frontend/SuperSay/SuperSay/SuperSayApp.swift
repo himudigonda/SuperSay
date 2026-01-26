@@ -48,6 +48,26 @@ struct SuperSayApp: App {
         
         MetricsService.shared.trackLaunch()
         registerCustomFonts()
+        checkRunningLocation()
+    }
+    
+    private func checkRunningLocation() {
+        let path = Bundle.main.bundlePath
+        if path.contains("/Volumes/") {
+            let alert = NSAlert()
+            alert.messageText = "Move to Applications"
+            alert.informativeText = "SuperSay needs to be in your Applications folder to work correctly. Would you like to move it now?"
+            alert.addButton(withTitle: "Move to Applications")
+            alert.addButton(withTitle: "Quit")
+            
+            if alert.runModal() == .alertFirstButtonReturn {
+                // Open Applications folder so user can drag-and-drop
+                NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications"))
+                NSApplication.shared.terminate(nil)
+            } else {
+                NSApplication.shared.terminate(nil)
+            }
+        }
     }
     
     private func registerCustomFonts() {

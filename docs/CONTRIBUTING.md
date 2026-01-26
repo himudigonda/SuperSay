@@ -1,25 +1,22 @@
 # Contributing to SuperSay
 
-## Development Philosophy
+## 🎯 Current Engineering Goals
+We are specifically looking for Pull Requests in these areas:
 
-1.  **Privacy First**: No telemetry, no cloud calls.
-2.  **Native Feel**: The app should feel like it belongs on macOS (Human Interface Guidelines).
-3.  **Clean Code**:
-    *   **Swift**: Use MVVM. No logic in Views.
-    *   **Python**: Type hints are mandatory. Use `ruff` for linting.
+### 1. Security & Notarization (High Priority)
+Currently, users must manually bypass Gatekeeper. We need a GitHub Action workflow that:
+- Code signs the binary with a Developer ID.
+- Submits the app to Apple's Notarization service (`xcrun altool`).
 
-## Pull Request Process
+### 2. Native Audio Taps
+Our current Music Ducking uses AppleScript. This is "hacky" and requires Automation permissions. We want to move to **CoreAudio/AudioKit** to intelligently duck system audio at the buffer level.
 
-1.  **Fork** the repo.
-2.  **Branch** off `main`. Name it `feature/your-feature` or `fix/your-bug`.
-3.  **Test**:
-    *   Ensure the backend compiles (`./scripts/compile_backend.sh`).
-    *   Ensure Xcode builds without warnings.
-4.  **Submit** PR with a screenshot (for UI changes) or logs (for logic changes).
+### 3. Local Model Management
+The 80MB ONNX model is currently zipped inside the app. We want to move to an on-demand downloader that verifies checksums and stores models in `Application Support`.
 
-## Reporting Issues
+## 🛠 Development Workflow
+1. **Backend**: Python logic is in `backend/app`. Use `uv` for management.
+2. **Frontend**: SwiftUI logic is in `frontend/SuperSay`.
+3. **The Bridge**: The communication is HTTP Streaming. Do not block the main thread.
 
-Please use the [Bug Report Template](../.github/ISSUE_TEMPLATE/bug_report.md) and include:
-*   macOS Version
-*   Python Version
-*   Console Logs (search "SuperSay" in Console.app)
+Run `make help` to see all available automation commands.

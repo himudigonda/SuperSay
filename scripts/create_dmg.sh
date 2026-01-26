@@ -4,72 +4,52 @@ set -e
 # ========================================
 # SuperSay DMG Builder
 # ========================================
-
 APP_NAME="SuperSay"
-VERSION="${1:-1.0.0}"
+VERSION="${1:-1.0.5}"
 DMG_NAME="${APP_NAME}-${VERSION}"
 BUILD_DIR="build"
-# UPDATE: Path moved
 XCODE_PROJECT_DIR="frontend/SuperSay"
+STAGING_DIR="${BUILD_DIR}/dmg-staging"
 
-echo "🚀 Building SuperSay v${VERSION} for Release..."
+echo "🚀 Building SuperSay v${VERSION} Professional DMG..."
 
-# Navigate to project root
-cd "$(dirname "$0")/.."
-
-# 0. Skip Backend (Already compiled in previous turn)
-echo "⏭️ Skipping Backend compilation (Using existing zip)..."
-# ./scripts/compile_backend.sh
-
-# 1. Build the Release app bundle
-echo "🔨 Building Release configuration..."
+# 1. Archive and Export App (Ensuring it's the Release build)
 xcodebuild -project "${XCODE_PROJECT_DIR}/SuperSay.xcodeproj" \
     -scheme "SuperSay" \
     -configuration Release \
     -derivedDataPath "${BUILD_DIR}/DerivedData" \
     -archivePath "${BUILD_DIR}/${APP_NAME}.xcarchive" \
     MARKETING_VERSION="${VERSION}" \
-    CURRENT_PROJECT_VERSION="1" \
     archive \
     CODE_SIGN_IDENTITY="-" \
-    ENABLE_HARDENED_RUNTIME=NO
+    AD_HOC_CODE_SIGNING_ALLOWED=YES
 
-# 2. Export the app
-echo "📦 Exporting app bundle..."
-APP_PATH="${BUILD_DIR}/DerivedData/Build/Products/Release/${APP_NAME}.app"
-
-if [ ! -d "$APP_PATH" ]; then
-    APP_PATH="${BUILD_DIR}/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app"
-fi
+# 2. Export the app from the Archive
+echo "📦 Exporting app from Archive..."
+APP_PATH="${BUILD_DIR}/${APP_NAME}.xcarchive/Products/Applications/${APP_NAME}.app"
 
 if [ ! -d "$APP_PATH" ]; then
-    echo "❌ Error: Could not find ${APP_NAME}.app"
+    echo "❌ Error: App not found at $APP_PATH"
     exit 1
 fi
 
 echo "   ✓ Found app at: $APP_PATH"
 
-# 3. Staging
-STAGING_DIR="${BUILD_DIR}/dmg-staging"
+# 3. Setup Staging
 rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR"
-
-# Copy the app
 cp -R "$APP_PATH" "$STAGING_DIR/"
-ln -s /Applications "$STAGING_DIR/Applications"
 
-# Inject Backend & Fonts (Vital for correct functionality)
-echo "📦 Injecting components into DMG staging..."
+# 3. Inject Backend & Fonts
 mkdir -p "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts"
 cp frontend/SuperSay/SuperSay/Resources/Fonts/*.ttf "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/Fonts/"
 cp frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip "$STAGING_DIR/${APP_NAME}.app/Contents/Resources/"
 
-# 4. Create DMG (Standardized Check)
+# 4. Create the Professional DMG
+# Note: We use the App Icon as the Volume Icon
+rm -f "${BUILD_DIR}/${DMG_NAME}.dmg"
+
 if command -v create-dmg &> /dev/null; then
-    echo "🎨 Creating beautiful DMG with create-dmg..."
-    rm -f "${BUILD_DIR}/${DMG_NAME}.dmg"
-    
-    # UPDATE: Icon path moved
     create-dmg \
         --volname "${APP_NAME}" \
         --volicon "${XCODE_PROJECT_DIR}/SuperSay/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" \
