@@ -98,11 +98,16 @@ test:
 	xcodebuild test -project $(PROJECT_PATH) -scheme $(SCHEME) -destination 'platform=macOS,arch=arm64'
 
 # --- 📦 RELEASES ---
-release: nuke
+release: nuke backend
 	@echo "🚀 Starting Full Release Build for v$(VERSION)..."
 	chmod +x scripts/create_dmg.sh
 	./scripts/create_dmg.sh $(VERSION)
 	@echo "✅ Release Ready: build/SuperSay-$(VERSION).dmg"
+
+ship: release
+	@echo "🚢 Shipping v$(VERSION)..."
+	chmod +x scripts/ship.sh
+	./scripts/ship.sh $(VERSION)
 
 help:
 	@echo "SuperSay Management"
@@ -110,4 +115,5 @@ help:
 	@echo "  make nuke      Complete factory reset (removes permissions/app data)"
 	@echo "  make run       Build and launch fresh"
 	@echo "  make release   Nuke, rebuild, and create distribution DMG"
+	@echo "  make ship      Full release pipeline: build + git tag + github upload"
 	@echo "  make test      Run all test suites"
