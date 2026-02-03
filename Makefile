@@ -90,6 +90,16 @@ format:
 	@echo "✨ Formatting Python..."
 	cd backend && uv run black .
 
+# --- 📊 BENCHMARKS ---
+benchmark:
+	@mkdir -p backend/benchmarks
+	@echo "🧪 Running Engine Scenarios..."
+	cd backend && PYTHONPATH=. uv run python benchmarks/deep_profiler.py
+	@echo "📈 Generating Visual Trends..."
+	uv run python scripts/visualize_vitals.py
+	@echo "📝 Generating Website Markdown Table..."
+	uv run python scripts/generate_vitals_table.py
+
 # --- 🧪 TESTS ---
 test:
 	@echo "🧪 Testing Backend..."
