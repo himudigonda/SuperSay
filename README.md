@@ -25,12 +25,16 @@
 
 ## 📖 Table of Contents
 
-- [✨ Key Features](#-key-features)
-- [🏗️ Architecture at a Glance](#️-architecture-at-a-glance)
-- [⚠️ First-Time Setup (Important)](#️-first-time-setup-important)
-- [⌨️ Global Shortcuts](#️-global-shortcuts)
-- [🛠 Developer Quickstart](#-developer-quickstart)
-- [📚 Project Documentation](#-project-documentation)
+- [🎙️ SuperSay](#️-supersay)
+  - [📖 Table of Contents](#-table-of-contents)
+  - [✨ Key Features](#-key-features)
+  - [🏗️ Architecture at a Glance](#️-architecture-at-a-glance)
+  - [⚠️ First-Time Setup (Important)](#️-first-time-setup-important)
+    - [1. Bypass "App is Damaged" (Gatekeeper)](#1-bypass-app-is-damaged-gatekeeper)
+    - [2. Enable "Speak Selection" (Accessibility)](#2-enable-speak-selection-accessibility)
+  - [⌨️ Global Shortcuts](#️-global-shortcuts)
+  - [🛠 Developer Quickstart](#-developer-quickstart)
+  - [📚 Project Documentation](#-project-documentation)
 
 ---
 
@@ -155,5 +159,5 @@ Explore our detailed guides to learn more about the internals of SuperSay:
 ---
 
 <p align="center">
-  Built with ❤️ by Himanshu Digonda
+  Built with ❤️ by Himansh Mudigonda
 </p>
