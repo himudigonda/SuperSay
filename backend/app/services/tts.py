@@ -56,35 +56,50 @@ class TTSEngine:
 
         pause_map = {".": 0.6, "!": 0.6, "?": 0.7, ":": 0.4, ";": 0.4, ",": 0.2}
 
+        # Concurrency control: limit to 2 simultaneous ONNX threads to prevent malloc crashes on some systems
+        semaphore = asyncio.Semaphore(2)
+
         async def generate_segment(seg: str):
-            try:
-                # Fire the heavy ONNX work into a thread to keep the loop free
-                audio, _ = await anyio.to_thread.run_sync(
-                    lambda: cls._model.create(
-                        seg.strip(), voice=voice, speed=speed, lang="en-us"
+            async with semaphore:
+                try:
+                    # Switch to native asyncio.to_thread (standard in Python 3.11+)
+                    # Note: We pass arguments directly instead of using a lambda to avoid capture group memory issues
+                    audio, _ = await asyncio.to_thread(
+                        cls._model.create,
+                        seg.strip(),
+                        voice=voice,
+                        speed=speed,
+                        lang="en-us",
                     )
-                )
-                return audio
-            except Exception as e:
-                print(f"[TTS] ❌ Model Error on '{seg[:20]}': {e}")
-                return None
+                    return audio
+                except Exception as e:
+                    print(f"[TTS] ❌ Model Error on '{seg[:20]}': {e}")
+                    return None
 
-        # Fire all tasks in parallel
-        tasks = [asyncio.create_task(generate_segment(s)) for s in segments]
+        if not segments:
+            return
 
-        # 2. Yield results in order as they complete
-        for i, seg in enumerate(segments):
-            audio = await tasks[i]  # Wait for this specific segment
-            if audio is not None:
-                # Apply fade to prevent popping
-                audio = AudioService.apply_fade(audio)
+        # --- OPTIMIZATION: PRIORITY QUEUEING ---
+        # 1. Generate the first segment immediately to minimize TTFA
+        # This ensures the hardware (ANE/GPU) is 100% focused on the first response
+        first_audio = await generate_segment(segments[0])
+        if first_audio is not None:
+            first_audio = AudioService.apply_fade(first_audio)
+            last_char = segments[0].strip()[-1] if segments[0].strip() else ""
+            silence_sec = pause_map.get(last_char, 0.2)
+            silence = AudioService.generate_silence(silence_sec)
+            yield np.concatenate([first_audio, silence])
 
-                # Determine silence duration
-                last_char = seg.strip()[-1] if seg.strip() else ""
-                silence_sec = pause_map.get(last_char, 0.2)
-                silence = AudioService.generate_silence(silence_sec)
+        # 2. Fire the rest in parallel AFTER the first one has been delivered
+        if len(segments) > 1:
+            tasks = [asyncio.create_task(generate_segment(s)) for s in segments[1:]]
 
-                # --- FIX: Concatenate into ONE block before yielding ---
-                # This prevents the frontend from getting tiny "silence-only" chunks
-                combined = np.concatenate([audio, silence])
-                yield combined
+            for i, task in enumerate(tasks):
+                audio = await task
+                if audio is not None:
+                    seg_text = segments[i + 1]
+                    audio = AudioService.apply_fade(audio)
+                    last_char = seg_text.strip()[-1] if seg_text.strip() else ""
+                    silence_sec = pause_map.get(last_char, 0.2)
+                    silence = AudioService.generate_silence(silence_sec)
+                    yield np.concatenate([audio, silence])
