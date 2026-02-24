@@ -28,13 +28,16 @@ git add .
 git commit -m "chore: release v$VERSION" || true
 git push origin main
 
-git tag -a v$VERSION -m "$APP_NAME v$VERSION: Definitive Edition"
-git push origin v$VERSION
-
-echo "🚀 PHASE 2: GitHub Release..."
+echo "🚀 PHASE 2: Release Notes Extraction..."
 # Extract section from CHANGELOG.md for this version
-# This finds the line with the version and reads until the next version header
-sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > RELEASE_NOTES.md
+sed -n "/^### .*v$VERSION/,\${
+    p
+}" CHANGELOG.md > RELEASE_NOTES.all
+
+# Only keep lines until the next version header
+awk 'BEGIN {p=0} /^### .* v[0-9]/ {if(p) exit; p=1} p {print}' RELEASE_NOTES.all > RELEASE_NOTES.md
+rm -f RELEASE_NOTES.all RELEASE_NOTES.tmp
+rm -f RELEASE_NOTES.tmp
 
 cat << EOF >> RELEASE_NOTES.md
 
@@ -45,9 +48,14 @@ xattr -cr /Applications/SuperSay.app
 \`\`\`
 EOF
 
+echo "🏷️ Tagging v$VERSION..."
+git tag -a v$VERSION -F RELEASE_NOTES.md
+git push origin v$VERSION
+
+echo "🚀 PHASE 3: GitHub Release..."
 gh release create v$VERSION "$DMG_PATH" \
     --title "$APP_NAME v$VERSION" \
     --notes-file RELEASE_NOTES.md
 
-rm RELEASE_NOTES.md
+rm -f RELEASE_NOTES.md
 echo "✅ SUCCESS! v$VERSION is live on GitHub."

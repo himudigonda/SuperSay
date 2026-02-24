@@ -266,38 +266,110 @@ struct MarkdownRenderView: View {
     let vm: DashboardViewModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            ForEach(markdown.split(separator: "\n"), id: \.self) { lineSubstring in
-                let line = String(lineSubstring).trimmingCharacters(in: .whitespaces)
+        VStack(alignment: .leading, spacing: 6) { // Slightly increased spacing
+            let lines = markdown.components(separatedBy: .newlines)
+            let parsedItems = parseMarkdownLines(lines)
 
-                if line.hasPrefix("### ") {
-                    Text(LocalizedStringKey(line.replacingOccurrences(of: "### ", with: "")))
-                        .font(vm.appFont(size: 15, weight: .bold))
-                        .foregroundStyle(.white)
-                        .padding(.top, 8)
-                } else if line.hasPrefix("## ") {
-                    Text(LocalizedStringKey(line.replacingOccurrences(of: "## ", with: "")))
-                        .font(vm.appFont(size: 16, weight: .black))
-                        .foregroundStyle(.cyan)
-                        .padding(.top, 10)
-                } else if line.hasPrefix("- ") || line.hasPrefix("* ") {
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("•")
-                            .font(vm.appFont(size: 13, weight: .bold))
-                            .foregroundStyle(.secondary)
-                        Text(LocalizedStringKey(line.replacingOccurrences(of: "- ", with: "").replacingOccurrences(of: "* ", with: "")))
-                            .font(vm.appFont(size: 13))
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(4)
-                    }
-                } else if !line.isEmpty {
-                    Text(LocalizedStringKey(line))
-                        .font(vm.appFont(size: 13))
-                        .foregroundStyle(.secondary.opacity(0.8))
-                        .lineSpacing(4)
-                }
+            ForEach(parsedItems.indices, id: \.self) { index in
+                let item = parsedItems[index]
+                renderItem(item)
             }
         }
+    }
+
+    @ViewBuilder
+    private func renderItem(_ item: ParsedItem) -> some View {
+        switch item.type {
+        case .header2:
+            Text(LocalizedStringKey(item.content))
+                .font(vm.appFont(size: 16, weight: .black))
+                .foregroundStyle(.cyan)
+                .padding(.top, 10)
+        case .header3:
+            Text(LocalizedStringKey(item.content))
+                .font(vm.appFont(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .padding(.top, 8)
+        case .bullet:
+            HStack(alignment: .top, spacing: 6) {
+                Text("•")
+                    .font(vm.appFont(size: 13, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text(LocalizedStringKey(item.content))
+                    .font(vm.appFont(size: 13))
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(4)
+            }
+        case .code:
+            Text(item.content)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.black.opacity(0.3))
+                .cornerRadius(8)
+                .foregroundStyle(.cyan.opacity(0.9))
+                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.white.opacity(0.1), lineWidth: 1))
+        case .text:
+            if !item.content.isEmpty {
+                Text(LocalizedStringKey(item.content))
+                    .font(vm.appFont(size: 13))
+                    .foregroundStyle(.secondary.opacity(0.8))
+                    .lineSpacing(4)
+            }
+        }
+    }
+
+    private enum ItemType {
+        case header2, header3, bullet, code, text
+    }
+
+    private struct ParsedItem {
+        let type: ItemType
+        let content: String
+    }
+
+    private func parseMarkdownLines(_ lines: [String]) -> [ParsedItem] {
+        var items: [ParsedItem] = []
+        var inCodeBlock = false
+        var currentCode = ""
+
+        for line in lines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+            if trimmed.hasPrefix("```") {
+                if inCodeBlock {
+                    // Close block
+                    items.append(ParsedItem(type: .code, content: currentCode.trimmingCharacters(in: .whitespacesAndNewlines)))
+                    currentCode = ""
+                }
+                inCodeBlock.toggle()
+                continue
+            }
+
+            if inCodeBlock {
+                currentCode += line + "\n"
+                continue
+            }
+
+            if trimmed.hasPrefix("### ") {
+                items.append(ParsedItem(type: .header3, content: trimmed.replacingOccurrences(of: "### ", with: "")))
+            } else if trimmed.hasPrefix("## ") {
+                items.append(ParsedItem(type: .header2, content: trimmed.replacingOccurrences(of: "## ", with: "")))
+            } else if trimmed.hasPrefix("- ") {
+                items.append(ParsedItem(type: .bullet, content: trimmed.replacingOccurrences(of: "- ", with: "")))
+            } else if trimmed.hasPrefix("* ") {
+                items.append(ParsedItem(type: .bullet, content: trimmed.replacingOccurrences(of: "* ", with: "")))
+            } else if !trimmed.isEmpty {
+                items.append(ParsedItem(type: .text, content: trimmed))
+            }
+        }
+
+        // Catch edge case: unclosed block
+        if inCodeBlock, !currentCode.isEmpty {
+            items.append(ParsedItem(type: .code, content: currentCode.trimmingCharacters(in: .whitespacesAndNewlines)))
+        }
+
+        return items
     }
 }
 
