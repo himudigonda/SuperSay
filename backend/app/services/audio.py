@@ -1,7 +1,6 @@
 import io
 import struct
 import wave
-from typing import Generator
 
 import numpy as np
 
@@ -31,7 +30,11 @@ class AudioService:
 
     @staticmethod
     def apply_fade(
-        samples: np.ndarray, duration_sec: float = 0.05, sample_rate: int = 24000
+        samples: np.ndarray,
+        duration_sec: float = 0.05,
+        sample_rate: int = 24000,
+        fade_in: bool = True,
+        fade_out: bool = True,
     ) -> np.ndarray:
         """
         Applies a linear fade-in and fade-out to the audio samples to prevent popping
@@ -46,15 +49,15 @@ class AudioService:
         if len(samples) < 2 * fade_samples:
             fade_samples = len(samples) // 2
 
-        # Create fade curves (0.0 to 1.0)
-        fade_in = np.linspace(0.0, 1.0, fade_samples).astype(np.float32)
-        fade_out = np.linspace(1.0, 0.0, fade_samples).astype(np.float32)
-
         # Apply Fade In
-        samples[:fade_samples] *= fade_in
+        if fade_in:
+            fade_in_curve = np.linspace(0.0, 1.0, fade_samples).astype(np.float32)
+            samples[:fade_samples] *= fade_in_curve
 
         # Apply Fade Out
-        samples[-fade_samples:] *= fade_out
+        if fade_out:
+            fade_out_curve = np.linspace(1.0, 0.0, fade_samples).astype(np.float32)
+            samples[-fade_samples:] *= fade_out_curve
 
         return samples
 

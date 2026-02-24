@@ -1,7 +1,7 @@
 import re
 
 # NEW: Import for typing the generator
-from typing import AsyncGenerator, Generator
+from typing import AsyncGenerator
 
 import numpy as np
 from app.core.config import settings
@@ -34,8 +34,6 @@ class TTSEngine:
 
         import asyncio
 
-        import anyio
-
         # 1. Improved Splitting: Split on . ! ? : ; but group tiny fragments
         raw_text = text.replace("\n", " ").strip()
         # Splits on terminal punctuation followed by a space
@@ -56,8 +54,8 @@ class TTSEngine:
 
         pause_map = {".": 0.6, "!": 0.6, "?": 0.7, ":": 0.4, ";": 0.4, ",": 0.2}
 
-        # Concurrency control: limit to 2 simultaneous ONNX threads to prevent malloc crashes on some systems
-        semaphore = asyncio.Semaphore(2)
+        # Concurrency control: limit to 1 simultaneous ONNX thread to prevent espeak-ng global state corruption
+        semaphore = asyncio.Semaphore(1)
 
         async def generate_segment(seg: str):
             async with semaphore:
@@ -84,13 +82,16 @@ class TTSEngine:
         # This ensures the hardware (ANE/GPU) is 100% focused on the first response
         first_audio = await generate_segment(segments[0])
         if first_audio is not None:
-            first_audio = AudioService.apply_fade(first_audio)
+            # FIX: Skip fade-in for the very first segment to avoid cutting off the first consonant
+            first_audio = AudioService.apply_fade(
+                first_audio, fade_in=False, fade_out=True
+            )
             last_char = segments[0].strip()[-1] if segments[0].strip() else ""
             silence_sec = pause_map.get(last_char, 0.2)
             silence = AudioService.generate_silence(silence_sec)
             yield np.concatenate([first_audio, silence])
 
-        # 2. Fire the rest in parallel AFTER the first one has been delivered
+        # 2. Fire the rest sequentially (via Semaphore 1) AFTER the first one has been delivered
         if len(segments) > 1:
             tasks = [asyncio.create_task(generate_segment(s)) for s in segments[1:]]
 
@@ -98,7 +99,8 @@ class TTSEngine:
                 audio = await task
                 if audio is not None:
                     seg_text = segments[i + 1]
-                    audio = AudioService.apply_fade(audio)
+                    # FIX: Apply both fade-in and fade-out for middle segments to prevent pops
+                    audio = AudioService.apply_fade(audio, fade_in=True, fade_out=True)
                     last_char = seg_text.strip()[-1] if seg_text.strip() else ""
                     silence_sec = pause_map.get(last_char, 0.2)
                     silence = AudioService.generate_silence(silence_sec)

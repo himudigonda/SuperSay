@@ -69,6 +69,35 @@ async def test_tts_engine_newlines():
 
 
 @pytest.mark.asyncio
+async def test_tts_engine_fade_logic():
+    # Verify that the first segment has fade_in=False and subsequent have fade_in=True
+    with patch.object(TTSEngine, "_model", MockKokoro()):
+        text = "First sentence. Second sentence."
+
+        mock_model = MagicMock()
+        mock_model.create.return_value = (np.ones(100), None)
+        TTSEngine._model = mock_model
+
+        with patch(
+            "app.services.tts.AudioService.apply_fade", wraps=AudioService.apply_fade
+        ) as mock_fade:
+            gen = TTSEngine.generate(text, "af_bella", 1.0)
+            async for _ in gen:
+                pass
+
+            assert mock_fade.call_count == 2
+            # First call should have fade_in=False
+            first_call_args = mock_fade.call_args_list[0]
+            assert first_call_args.kwargs["fade_in"] is False
+            assert first_call_args.kwargs["fade_out"] is True
+
+            # Second call should have fade_in=True
+            second_call_args = mock_fade.call_args_list[1]
+            assert second_call_args.kwargs["fade_in"] is True
+            assert second_call_args.kwargs["fade_out"] is True
+
+
+@pytest.mark.asyncio
 async def test_tts_engine_not_initialized():
     TTSEngine._model = None
     with pytest.raises(RuntimeError, match="Model not initialized"):
