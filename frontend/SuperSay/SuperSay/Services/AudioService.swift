@@ -24,7 +24,6 @@ class AudioService: NSObject, ObservableObject {
     
     // Timer for progress
     private var timer: AnyCancellable?
-    private var startTime: Date?
     private var pausedTime: TimeInterval = 0
     
     // For duration estimation
@@ -115,7 +114,6 @@ class AudioService: NSObject, ObservableObject {
             playerNode.play()
             isPlaying = true
             hasStartedPlayback = true
-            startTime = Date()
             startTimer()
         } catch {
             print("❌ AudioService: Start error: \(error)")
@@ -128,8 +126,19 @@ class AudioService: NSObject, ObservableObject {
             .autoconnect()
             .sink { [weak self] _ in
                 guard let self = self, self.isPlaying else { return }
-                let elapsedSinceStart = Date().timeIntervalSince(self.startTime ?? Date())
-                self.currentTime = self.pausedTime + elapsedSinceStart
+                
+                // 🔊 HARDWARE SYNC: Only count time that physically left the speakers
+                if let nodeTime = self.playerNode.lastRenderTime,
+                   let playerTime = self.playerNode.playerTime(forNodeTime: nodeTime) {
+                    
+                    let elapsedSamples = Double(playerTime.sampleTime)
+                    // sampleTime can briefly be negative during engine startup
+                    if elapsedSamples > 0 {
+                        let elapsedSeconds = elapsedSamples / self.format.sampleRate
+                        self.currentTime = self.pausedTime + elapsedSeconds
+                    }
+                }
+                
                 if !self.isDragging {
                     self.progress = self.duration > 0 ? min(1.0, self.currentTime / self.duration) : 0
                 }
@@ -138,16 +147,20 @@ class AudioService: NSObject, ObservableObject {
 
     func togglePause() {
         if playerNode.isPlaying {
+            // Save accumulated hardware time before pausing
+            if let nodeTime = playerNode.lastRenderTime,
+               let playerTime = playerNode.playerTime(forNodeTime: nodeTime) {
+                let elapsedSamples = Double(playerTime.sampleTime)
+                if elapsedSamples > 0 {
+                    pausedTime += elapsedSamples / format.sampleRate
+                }
+            }
             playerNode.pause()
             engine.pause()
-            if let start = startTime {
-                pausedTime += Date().timeIntervalSince(start)
-            }
             isPlaying = false
         } else {
             try? engine.start()
             playerNode.play()
-            startTime = Date()
             isPlaying = true
             startTimer()
         }
@@ -175,9 +188,7 @@ class AudioService: NSObject, ObservableObject {
                 }
             })
             
-            let now = Date()
             self.pausedTime = targetTime
-            self.startTime = now
             self.currentTime = targetTime
             
             if !engine.isRunning { try? engine.start() }
@@ -208,7 +219,6 @@ class AudioService: NSObject, ObservableObject {
         progress = 0
         currentTime = 0
         pausedTime = 0
-        startTime = nil
         hasStartedPlayback = false
         isStreamActive = false
         hasStrippedHeader = false
