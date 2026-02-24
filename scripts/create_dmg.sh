@@ -5,7 +5,7 @@ set -e
 # SuperSay DMG Builder
 # ========================================
 APP_NAME="SuperSay"
-VERSION="${1:-1.0.5}"
+VERSION="${1:-1.0.6}"
 DMG_NAME="${APP_NAME}-${VERSION}"
 BUILD_DIR="build"
 XCODE_PROJECT_DIR="frontend/SuperSay"

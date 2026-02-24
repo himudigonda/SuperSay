@@ -1,39 +1,39 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 class Downloader: NSObject, ObservableObject, URLSessionDownloadDelegate {
     @Published var progress: Double = 0
     @Published var isDownloading = false
     @Published var isFinished = false
     @Published var downloadedURL: URL?
-    
+
     private var downloadTask: URLSessionDownloadTask?
-    
+
     func download(url: URL) {
         isDownloading = true
         let session = URLSession(configuration: .default, delegate: self, delegateQueue: .main)
         downloadTask = session.downloadTask(with: url)
         downloadTask?.resume()
     }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
+
+    func urlSession(_: URLSession, downloadTask _: URLSessionDownloadTask, didWriteData _: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
         if totalBytesExpectedToWrite > 0 {
             DispatchQueue.main.async {
                 self.progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             }
         }
     }
-    
-    func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
+
+    func urlSession(_: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         let fileManager = FileManager.default
         let destinationURL = fileManager.temporaryDirectory.appendingPathComponent(downloadTask.originalRequest?.url?.lastPathComponent ?? "update.dmg")
-        
+
         do {
             if fileManager.fileExists(atPath: destinationURL.path) {
                 try fileManager.removeItem(at: destinationURL)
             }
             try fileManager.copyItem(at: location, to: destinationURL)
-            
+
             DispatchQueue.main.async {
                 self.isDownloading = false
                 self.downloadedURL = destinationURL
@@ -43,13 +43,13 @@ class Downloader: NSObject, ObservableObject, URLSessionDownloadDelegate {
             print("❌ Downloader: Failed to save DMG: \(error)")
         }
     }
-    
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        if let error = error {
-             print("❌ Downloader: task completed with error: \(error)")
-             DispatchQueue.main.async {
-                 self.isDownloading = false
-             }
+
+    func urlSession(_: URLSession, task _: URLSessionTask, didCompleteWithError error: (any Error)?) {
+        if let error {
+            print("❌ Downloader: task completed with error: \(error)")
+            DispatchQueue.main.async {
+                self.isDownloading = false
+            }
         }
     }
 }
@@ -57,11 +57,11 @@ class Downloader: NSObject, ObservableObject, URLSessionDownloadDelegate {
 struct UpdateView: View {
     @EnvironmentObject var vm: DashboardViewModel
     @Environment(\.dismiss) var dismiss
-    
+
     @StateObject private var downloader = Downloader()
     @State private var errorMessage: String?
     @State private var isInstalling = false
-    
+
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -72,10 +72,10 @@ struct UpdateView: View {
                     .symbolEffect(.bounce, value: downloader.isDownloading)
                     .rotationEffect(.degrees(isInstalling ? 360 : 0))
                     .animation(isInstalling ? .linear(duration: 2).repeatForever(autoreverses: false) : .default, value: isInstalling)
-                
+
                 Text(isInstalling ? "Installing Update" : "Update Available")
                     .font(vm.appFont(size: 24, weight: .bold))
-                
+
                 if let latest = vm.availableUpdate {
                     Text(latest.name)
                         .font(vm.appFont(size: 16, weight: .semibold))
@@ -84,35 +84,35 @@ struct UpdateView: View {
             }
             .padding(.top, 40)
             .padding(.bottom, 24)
-            
+
             // Release Notes (Aggregated)
             VStack(alignment: .leading, spacing: 12) {
                 Text("What's New")
                     .font(vm.appFont(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
                     .textCase(.uppercase)
-                
+
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        ForEach(vm.allRelevantReleases, id: \.tag_name) { release in
+                        ForEach(vm.allRelevantReleases, id: \.tagName) { release in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text(release.tag_name)
+                                    Text(release.tagName)
                                         .font(vm.appFont(size: 12, weight: .black))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
                                         .background(.cyan.opacity(0.2))
                                         .foregroundStyle(.cyan)
                                         .clipShape(Capsule())
-                                    
+
                                     Text(release.name)
                                         .font(vm.appFont(size: 14, weight: .bold))
                                 }
-                                
+
                                 MarkdownRenderView(markdown: release.body, vm: vm)
                             }
-                            
-                            if release.tag_name != vm.allRelevantReleases.last?.tag_name {
+
+                            if release.tagName != vm.allRelevantReleases.last?.tagName {
                                 Divider().opacity(0.1)
                             }
                         }
@@ -128,7 +128,7 @@ struct UpdateView: View {
                 }
             }
             .padding(.horizontal, 40)
-            
+
             // Footer (Controls)
             VStack(spacing: 24) {
                 if downloader.isDownloading {
@@ -136,7 +136,7 @@ struct UpdateView: View {
                         ProgressView(value: downloader.progress)
                             .tint(.cyan)
                             .scaleEffect(x: 1, y: 0.5)
-                        
+
                         Text("Downloading update... \(Int(downloader.progress * 100))%")
                             .font(vm.appFont(size: 11, weight: .medium))
                             .foregroundStyle(.secondary)
@@ -150,7 +150,7 @@ struct UpdateView: View {
                         .font(vm.appFont(size: 12))
                         .foregroundStyle(.red)
                 }
-                
+
                 HStack(spacing: 16) {
                     Button(downloader.isFinished ? "Close" : "Later") {
                         dismiss()
@@ -162,7 +162,7 @@ struct UpdateView: View {
                     .background(.ultraThinMaterial)
                     .clipShape(Capsule())
                     .disabled(isInstalling)
-                    
+
                     if downloader.isFinished {
                         Button {
                             autoInstall()
@@ -199,22 +199,23 @@ struct UpdateView: View {
         .frame(width: 550, height: 750)
         .background(VisualEffectView(material: .sidebar, blendingMode: .behindWindow).ignoresSafeArea())
     }
-    
+
     private func startDownload() {
         guard let latest = vm.availableUpdate,
-              let asset = latest.assets.first(where: { $0.name.contains(".dmg") }) else {
+              let asset = latest.assets.first(where: { $0.name.contains(".dmg") })
+        else {
             errorMessage = "No DMG found in release assets."
             return
         }
-        
+
         errorMessage = nil
-        downloader.download(url: asset.browser_download_url)
+        downloader.download(url: asset.browserDownloadUrl)
     }
-    
+
     private func autoInstall() {
         guard let dmgURL = downloader.downloadedURL else { return }
         isInstalling = true
-        
+
         Task {
             let script = """
             try
@@ -241,7 +242,7 @@ struct UpdateView: View {
                 return errMsg
             end try
             """
-            
+
             var error: NSDictionary?
             if let scriptObject = NSAppleScript(source: script) {
                 let result = scriptObject.executeAndReturnError(&error)
@@ -259,16 +260,16 @@ struct UpdateView: View {
     }
 }
 
-// Custom Markdown Parser View
+/// Custom Markdown Parser View
 struct MarkdownRenderView: View {
     let markdown: String
     let vm: DashboardViewModel
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ForEach(markdown.split(separator: "\n"), id: \.self) { lineSubstring in
                 let line = String(lineSubstring).trimmingCharacters(in: .whitespaces)
-                
+
                 if line.hasPrefix("### ") {
                     Text(LocalizedStringKey(line.replacingOccurrences(of: "### ", with: "")))
                         .font(vm.appFont(size: 15, weight: .bold))
@@ -303,16 +304,16 @@ struct MarkdownRenderView: View {
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
-    
-    func makeNSView(context: Context) -> NSVisualEffectView {
+
+    func makeNSView(context _: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
         return view
     }
-    
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+
+    func updateNSView(_ nsView: NSVisualEffectView, context _: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
     }

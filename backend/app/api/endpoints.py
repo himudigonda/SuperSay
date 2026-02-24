@@ -30,7 +30,7 @@ def health_check():
 @router.post("/speak")
 async def speak(req: SpeakRequest):
     try:
-        print(f"DEBUG [API] >>> New Request Received")
+        print("DEBUG [API] >>> New Request Received")
         print(f'DEBUG [API] Text: "{req.text}"')
         print(
             f"DEBUG [API] Voice: {req.voice}, Speed: {req.speed}, Volume: {req.volume}"

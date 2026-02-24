@@ -1,7 +1,6 @@
 import io
 import struct
 import wave
-from typing import Generator
 
 import numpy as np
 
@@ -12,9 +11,8 @@ class AudioService:
         """
         Clips, normalizes, and encodes raw float samples into a WAV container.
         """
-        # 1. Digital Boost / Clipping
-        if volume != 1.0:
-            samples = np.clip(samples * volume, -1.0, 1.0)
+        # 1. Digital Boost / Unconditional Clipping to prevent integer overflow
+        samples = np.clip(samples * volume, -1.0, 1.0)
 
         # 2. Convert to 16-bit PCM
         pcm_data = (samples * 32767).astype(np.int16)
@@ -31,7 +29,11 @@ class AudioService:
 
     @staticmethod
     def apply_fade(
-        samples: np.ndarray, duration_sec: float = 0.05, sample_rate: int = 24000
+        samples: np.ndarray,
+        duration_sec: float = 0.05,
+        sample_rate: int = 24000,
+        fade_in: bool = True,
+        fade_out: bool = True,
     ) -> np.ndarray:
         """
         Applies a linear fade-in and fade-out to the audio samples to prevent popping
@@ -40,21 +42,23 @@ class AudioService:
         if len(samples) == 0:
             return samples
 
+        # FIX: Operate on a copy to ensure we don't mutate shared ONNX memory
+        samples = samples.copy()
         fade_samples = int(duration_sec * sample_rate)
 
         # If the audio is shorter than 2x fade, just fade the whole thing to center
         if len(samples) < 2 * fade_samples:
             fade_samples = len(samples) // 2
 
-        # Create fade curves (0.0 to 1.0)
-        fade_in = np.linspace(0.0, 1.0, fade_samples).astype(np.float32)
-        fade_out = np.linspace(1.0, 0.0, fade_samples).astype(np.float32)
-
         # Apply Fade In
-        samples[:fade_samples] *= fade_in
+        if fade_in and fade_samples > 0:
+            fade_in_curve = np.linspace(0.6, 1.0, fade_samples).astype(np.float32)
+            samples[:fade_samples] *= fade_in_curve
 
         # Apply Fade Out
-        samples[-fade_samples:] *= fade_out
+        if fade_out and fade_samples > 0:
+            fade_out_curve = np.linspace(1.0, 0.6, fade_samples).astype(np.float32)
+            samples[-fade_samples:] *= fade_out_curve
 
         return samples
 
@@ -99,7 +103,7 @@ class AudioService:
 
         # 2. Stream PCM data chunks - use 'async for'
         async for samples in sample_generator:
-            if volume != 1.0:
-                samples = np.clip(samples * volume, -1.0, 1.0)
+            # FIX: Unconditionally clip to prevent integer overflow pops/screeches!
+            samples = np.clip(samples * volume, -1.0, 1.0)
             pcm_data = (samples * 32767).astype(np.int16).tobytes()
             yield pcm_data

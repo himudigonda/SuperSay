@@ -21,6 +21,9 @@ setup:
 	cd backend && uv sync
 	@echo "📦 Checking Swift Environment..."
 	xcode-select -p || echo "⚠️ Xcode not found!"
+	@echo "🛠️ Configuring Git Hooks..."
+	@git config core.hooksPath .githooks
+	@echo "✅ Setup Complete."
 
 # --- 🐍 BACKEND ---
 backend:
@@ -88,7 +91,10 @@ lint:
 
 format:
 	@echo "✨ Formatting Python..."
+	cd backend && uv run ruff check --fix .
 	cd backend && uv run black .
+	@echo "✨ Formatting Swift..."
+	if which swiftformat >/dev/null; then swiftformat . --swiftversion 6; else echo "⚠️ swiftformat not installed"; fi
 
 # --- 📊 BENCHMARKS ---
 benchmark:

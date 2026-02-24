@@ -6,29 +6,29 @@ struct VaultView: View {
     @State private var searchText = ""
     @State private var showOnlyFavorites = false
     @State private var selectedEntry: HistoryEntry? = nil
-    
-    // Group entries by day
+
+    /// Group entries by day
     private var groupedEntries: [(Date, [HistoryEntry])] {
         let sorted = history.history.filter { entry in
             let matchesSearch = searchText.isEmpty || entry.text.localizedCaseInsensitiveContains(searchText)
             let matchesFavorite = !showOnlyFavorites || entry.isFavorite
             return matchesSearch && matchesFavorite
         }
-        
+
         let groups = Dictionary(grouping: sorted) { entry in
             Calendar.current.startOfDay(for: entry.timestamp)
         }
         return groups.sorted { $0.key > $1.key }
     }
-    
+
     var body: some View {
         List {
             ForEach(groupedEntries, id: \.0) { date, entries in
                 Section(header: Text(date, style: .date)
                     .font(dashboardVM.appFont(size: 11, weight: .bold))
                     .foregroundStyle(.secondary)
-                    .kerning(1)
-                ) {
+                    .kerning(1))
+                {
                     ForEach(entries) { entry in
                         VaultEntryRow(entry: entry, selectedEntry: $selectedEntry)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -37,7 +37,7 @@ struct VaultView: View {
                                 } label: {
                                     Label("Delete", systemImage: "trash")
                                 }
-                                
+
                                 Button {
                                     history.toggleFavorite(entry: entry)
                                 } label: {
@@ -64,7 +64,7 @@ struct VaultView: View {
                             .foregroundStyle(showOnlyFavorites ? .yellow : .secondary)
                     }
                     .help("Show starred snippets only")
-                    
+
                     Button(role: .destructive) {
                         history.clearHistory()
                     } label: {
@@ -83,7 +83,7 @@ struct VaultEntryRow: View {
     @EnvironmentObject var dashboardVM: DashboardViewModel
     let entry: HistoryEntry
     @Binding var selectedEntry: HistoryEntry?
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack {
@@ -91,13 +91,13 @@ struct VaultEntryRow: View {
                     .font(dashboardVM.appFont(size: 10, weight: .regular))
                     .foregroundColor(.cyan)
                 Spacer()
-                
+
                 if entry.isFavorite {
                     Image(systemName: "star.fill")
-                    .font(.system(size: 8))
-                    .foregroundStyle(.yellow)
+                        .font(.system(size: 8))
+                        .foregroundStyle(.yellow)
                 }
-                
+
                 Text(entry.voice)
                     .font(dashboardVM.appFont(size: 8, weight: .regular))
                     .foregroundColor(.secondary)
@@ -113,15 +113,15 @@ struct VaultEntryRow: View {
             selectedEntry = entry
         }
         .contextMenu {
-            Button("Re-Speak") { 
-                Task { await dashboardVM.speak(text: entry.text) } 
+            Button("Re-Speak") {
+                Task { await dashboardVM.speak(text: entry.text) }
             }
             Button(entry.isFavorite ? "Unstar" : "Star") {
                 history.toggleFavorite(entry: entry)
             }
-            Button("Copy") { 
+            Button("Copy") {
                 NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(entry.text, forType: .string) 
+                NSPasteboard.general.setString(entry.text, forType: .string)
             }
             Divider()
             Button(role: .destructive) {
@@ -137,7 +137,7 @@ struct VaultEntryDetailView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var vm: DashboardViewModel
     let entry: HistoryEntry
-    
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -158,7 +158,7 @@ struct VaultEntryDetailView: View {
             }
             .padding(24)
             .background(.ultraThinMaterial)
-            
+
             ScrollView {
                 Text(entry.text)
                     .font(vm.appFont(size: 18, weight: .regular))
@@ -166,12 +166,12 @@ struct VaultEntryDetailView: View {
                     .padding(32)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            
+
             HStack(spacing: 16) {
                 Button {
-                    Task { 
+                    Task {
                         dismiss()
-                        await vm.speak(text: entry.text) 
+                        await vm.speak(text: entry.text)
                     }
                 } label: {
                     Label("RE-SPEAK", systemImage: "play.fill")
@@ -183,7 +183,7 @@ struct VaultEntryDetailView: View {
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                
+
                 Button {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(entry.text, forType: .string)

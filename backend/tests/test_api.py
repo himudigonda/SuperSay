@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
 import numpy as np
-import pytest
 from app.main import app
 from app.services.audio import AudioService
 from app.services.tts import TTSEngine

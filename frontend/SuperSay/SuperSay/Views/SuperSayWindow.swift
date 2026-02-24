@@ -7,7 +7,7 @@ struct SuperSayWindow: View {
     @EnvironmentObject var launchManager: LaunchManager
     @Environment(\.colorScheme) var colorScheme
     // @State private var selectedTab: String? = "home" // Managed by VM now
-    
+
     var body: some View {
         NavigationSplitView {
             VStack(alignment: .leading, spacing: 0) {
@@ -21,7 +21,7 @@ struct SuperSayWindow: View {
                             .font(.system(size: 16, weight: .black))
                             .foregroundStyle(.white)
                     }
-                    
+
                     VStack(alignment: .leading, spacing: 0) {
                         Text("SuperSay")
                             .font(vm.appFont(size: 16, weight: .bold))
@@ -29,18 +29,18 @@ struct SuperSayWindow: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)
-                
+
                 List(selection: $vm.selectedTab) {
                     Section(header: Text("Library").font(vm.appFont(size: 11, weight: .bold))) {
-                        NavigationLink(value: "home") { 
+                        NavigationLink(value: "home") {
                             Label("Now Playing", systemImage: "play.circle.fill")
                                 .font(vm.appFont(size: 13))
                         }
-                        NavigationLink(value: "library") { 
+                        NavigationLink(value: "library") {
                             Label("Audiobooks", systemImage: "book.closed.fill")
                                 .font(vm.appFont(size: 13))
                         }
-                        NavigationLink(value: "history") { 
+                        NavigationLink(value: "history") {
                             Label("The Vault", systemImage: "clock.arrow.circlepath")
                                 .font(vm.appFont(size: 13))
                         }
@@ -48,13 +48,13 @@ struct SuperSayWindow: View {
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
-                
+
                 Spacer()
-                
+
                 // SYSTEM / PREFERENCES AT BOTTOM
                 VStack(spacing: 8) {
                     Divider().padding(.horizontal, 20).opacity(0.3)
-                    
+
                     Button {
                         vm.selectedTab = "preferences"
                     } label: {
@@ -74,18 +74,18 @@ struct SuperSayWindow: View {
                     .padding(.horizontal, 16)
                 }
                 .padding(.bottom, 8)
-                
+
                 // DEVELOPER ATTRIBUTION
                 VStack(alignment: .leading, spacing: 6) {
                     Text("DEVELOPED BY")
                         .font(vm.appFont(size: 8, weight: .black))
                         .kerning(1)
                         .foregroundStyle(.secondary.opacity(0.5))
-                    
+
                     Text("Himansh Mudigonda")
                         .font(vm.appFont(size: 11, weight: .bold))
                         .foregroundStyle(.secondary)
-                    
+
                     HStack(spacing: 18) {
                         Link(destination: URL(string: "https://github.com/himudigonda")!) {
                             Image("github") // Explicit Asset
@@ -94,7 +94,7 @@ struct SuperSayWindow: View {
                                 .frame(width: 36, height: 36)
                         }
                         .help("GitHub")
-                        
+
                         Link(destination: URL(string: "https://www.linkedin.com/in/himudigonda")!) {
                             Image("linkedin") // Explicit Asset
                                 .resizable()
@@ -102,7 +102,7 @@ struct SuperSayWindow: View {
                                 .frame(width: 36, height: 36)
                         }
                         .help("LinkedIn")
-                        
+
                         Link(destination: URL(string: "https://himudigonda.me")!) {
                             Image(systemName: "globe") // System Icon
                                 .resizable()
@@ -122,9 +122,9 @@ struct SuperSayWindow: View {
                 // MAIN CONTENT
                 detailContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
+
                 // FLOATING MINI PLAYER (Global) - Hide when on main dashboard to avoid duplicate bars
-                if (vm.status == .speaking || vm.status == .paused) && vm.selectedTab != "home" {
+                if vm.status == .speaking || vm.status == .paused, vm.selectedTab != "home" {
                     miniPlayerHUD
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
@@ -140,7 +140,7 @@ struct SuperSayWindow: View {
         .onAppear {
             // Background check for updates on startup
             vm.checkForUpdates(manual: false)
-            
+
             // Prepare backend if needed
             Task {
                 await launchManager.prepare()
@@ -150,7 +150,7 @@ struct SuperSayWindow: View {
             if !launchManager.isReady {
                 ZStack {
                     adaptiveBackdrop
-                    
+
                     VStack(spacing: 20) {
                         if let error = launchManager.error {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -158,7 +158,7 @@ struct SuperSayWindow: View {
                                 .foregroundStyle(.red)
                             Text("Launch Failed").font(vm.appFont(size: 18, weight: .bold))
                             Text(error).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal)
-                            
+
                             Button("Try Again") {
                                 launchManager.error = nil
                                 Task { await launchManager.prepare() }
@@ -174,7 +174,7 @@ struct SuperSayWindow: View {
         }
         .animation(.default, value: launchManager.isReady)
     }
-    
+
     @ViewBuilder
     private var detailContent: some View {
         switch vm.selectedTab {
@@ -185,7 +185,7 @@ struct SuperSayWindow: View {
         default: MainDashboardView()
         }
     }
-    
+
     private var miniPlayerHUD: some View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
@@ -197,13 +197,13 @@ struct SuperSayWindow: View {
                     .lineLimit(1)
             }
             .frame(width: 250, alignment: .leading)
-            
+
             ProgressView(value: audio.progress)
                 .tint(.cyan)
                 .scaleEffect(x: 1, y: 0.5)
-            
+
             HStack(spacing: 12) {
-                Button { audio.togglePause() } label: {
+                Button { vm.togglePlayback() } label: {
                     Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
                 }
                 Button { audio.stop() } label: {

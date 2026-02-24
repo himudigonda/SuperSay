@@ -7,15 +7,15 @@ enum AppStatus: Equatable {
     case speaking
     case paused
     case error(String)
-    
+
     var message: String {
         switch self {
-        case .ready: return "Ready"
-        case .grabbing: return "Reading Screen..."
-        case .thinking: return "AI is Processing..."
-        case .speaking: return "Speaking"
-        case .paused: return "Paused"
-        case .error(let m): return m
+        case .ready: "Ready"
+        case .grabbing: "Reading Screen..."
+        case .thinking: "AI is Processing..."
+        case .speaking: "Speaking"
+        case .paused: "Paused"
+        case let .error(m): m
         }
     }
 }
@@ -26,11 +26,11 @@ struct HistoryEntry: Codable, Identifiable, Equatable {
     let timestamp: Date
     let voice: String
     var isFavorite: Bool
-    
+
     init(text: String, voice: String, isFavorite: Bool = false) {
-        self.id = UUID()
+        id = UUID()
         self.text = text
-        self.timestamp = Date()
+        timestamp = Date()
         self.voice = voice
         self.isFavorite = isFavorite
     }

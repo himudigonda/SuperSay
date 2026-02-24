@@ -1,0 +1,27 @@
+#!/bin/bash
+
+# SuperSay Pre-commit Hook
+# Ensures code quality before every commit
+
+echo "🔍 [Pre-commit] Starting quality checks..."
+
+# 1. Format code
+echo "✨ [Pre-commit] Formatting code..."
+make format > /dev/null 2>&1
+
+# 2. Add any changes made by format (optional but recommended for strictly formatted projects)
+# However, usually we want the user to review and add them. 
+# For now, we'll just block if lint fails after format.
+
+# 3. Lint code
+echo "🧹 [Pre-commit] Linting code..."
+make lint
+LINT_STATUS=$?
+
+if [ $LINT_STATUS -ne 0 ]; then
+    echo "❌ [Pre-commit] Quality check failed. Please fix violations before committing."
+    exit 1
+fi
+
+echo "✅ [Pre-commit] All checks passed!"
+exit 0
