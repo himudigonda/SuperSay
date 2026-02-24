@@ -125,7 +125,7 @@ struct SuperSayApp: App {
         KeyboardShortcuts.onKeyUp(for: .togglePause) {
             print("⌨️ KeyboardShortcuts: togglePause triggered")
             Task { @MainActor in
-                audio.togglePause()
+                vm.togglePlayback()
             }
         }
         

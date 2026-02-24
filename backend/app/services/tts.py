@@ -1,6 +1,6 @@
+import asyncio
+import concurrent.futures  # <--- NEW IMPORT
 import re
-
-# NEW: Import for typing the generator
 from typing import AsyncGenerator
 
 import numpy as np
@@ -12,6 +12,11 @@ from kokoro_onnx import Kokoro
 class TTSEngine:
     _instance = None
     _model: Kokoro = None
+
+    # 🔒 THE FIX: A dedicated, single background thread for ALL Kokoro/espeak operations.
+    # This guarantees espeak-ng never runs concurrently and always stays on the
+    # exact same C-thread, eliminating cross-thread memory leaks and hallucinations.
+    _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     @classmethod
     def initialize(cls):
@@ -32,12 +37,8 @@ class TTSEngine:
         if not cls._model:
             raise RuntimeError("Model not initialized. Call initialize() first.")
 
-        import asyncio
-
         # 1. Improved Splitting: Split on . ! ? : ; , but group tiny fragments
         raw_text = text.replace("\n", " ").strip()
-        # Splits on terminal punctuation followed by a space
-        # FIX: Added comma to the regex split characters
         raw_segments = [
             s.strip() for s in re.split(r"(?<=[.!?|:;,]) +", raw_text) if s.strip()
         ]
@@ -46,46 +47,37 @@ class TTSEngine:
         temp_seg = ""
         for s in raw_segments:
             temp_seg += (" " + s) if temp_seg else s
-            # Only finalize segment if it has enough words or a terminal mark
-            # FIX: Finalize segment if it hits a hard terminal (.!?) OR if it's long enough and hits a comma (>= 5 words)
             if len(temp_seg.split()) >= 5 or any(temp_seg.endswith(p) for p in ".!?"):
                 segments.append(temp_seg.strip())
                 temp_seg = ""
         if temp_seg:
             segments.append(temp_seg.strip())
 
-        # FIX: Dramatically increased silence gaps for a more cinematic/natural reading pace
         pause_map = {".": 0.8, "!": 0.8, "?": 0.8, ":": 0.5, ";": 0.5, ",": 0.4}
 
-        # Concurrency control: limit to 1 simultaneous ONNX thread to prevent espeak-ng global state corruption
-        semaphore = asyncio.Semaphore(1)
-
         async def generate_segment(seg: str):
-            async with semaphore:
-                try:
-                    # Switch to native asyncio.to_thread (standard in Python 3.11+)
-                    # Note: We pass arguments directly instead of using a lambda to avoid capture group memory issues
-                    audio, _ = await asyncio.to_thread(
-                        cls._model.create,
-                        seg.strip(),
-                        voice=voice,
-                        speed=speed,
-                        lang="en-us",
-                    )
-                    return audio
-                except Exception as e:
-                    print(f"[TTS] ❌ Model Error on '{seg[:20]}': {e}")
-                    return None
+            try:
+                loop = asyncio.get_running_loop()
+                # 🔒 Run strictly inside the dedicated single-thread executor
+                audio, _ = await loop.run_in_executor(
+                    cls._executor,
+                    cls._model.create,
+                    seg.strip(),
+                    voice,
+                    speed,
+                    "en-us",
+                )
+                return audio
+            except Exception as e:
+                print(f"[TTS] ❌ Model Error on '{seg[:20]}': {e}")
+                return None
 
         if not segments:
             return
 
         # --- OPTIMIZATION: PRIORITY QUEUEING ---
-        # 1. Generate the first segment immediately to minimize TTFA
-        # This ensures the hardware (ANE/GPU) is 100% focused on the first response
         first_audio = await generate_segment(segments[0])
         if first_audio is not None:
-            # FIX: Skip fade-in for the very first segment to avoid cutting off the first consonant
             first_audio = AudioService.apply_fade(
                 first_audio, fade_in=False, fade_out=True
             )
@@ -94,15 +86,15 @@ class TTSEngine:
             silence = AudioService.generate_silence(silence_sec)
             yield np.concatenate([first_audio, silence])
 
-        # 2. Fire the rest sequentially (via Semaphore 1) AFTER the first one has been delivered
         if len(segments) > 1:
+            # Because the executor has max_workers=1, scheduling them concurrently
+            # simply queues them in exact order. They will execute 100% safely.
             tasks = [asyncio.create_task(generate_segment(s)) for s in segments[1:]]
 
             for i, task in enumerate(tasks):
                 audio = await task
                 if audio is not None:
                     seg_text = segments[i + 1]
-                    # FIX: Apply both fade-in and fade-out for middle segments to prevent pops
                     audio = AudioService.apply_fade(audio, fade_in=True, fade_out=True)
                     last_char = seg_text.strip()[-1] if seg_text.strip() else ""
                     silence_sec = pause_map.get(last_char, 0.2)

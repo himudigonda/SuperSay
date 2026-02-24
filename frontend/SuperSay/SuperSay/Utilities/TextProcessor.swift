@@ -73,7 +73,18 @@ struct TextProcessor {
                 "p.": "page"
             ]
             for (k, v) in abbr {
-                result = result.replacingOccurrences(of: k, with: v, options: .caseInsensitive)
+                // FIX: Escape the period and enforce a Word Boundary (\b)
+                // This ensures "host." doesn't trigger the "st." replacement.
+                let escapedKey = k.replacingOccurrences(of: ".", with: "\\.")
+                let pattern = "\\b\(escapedKey)"
+                
+                if let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) {
+                    result = regex.stringByReplacingMatches(
+                        in: result,
+                        range: NSRange(result.startIndex..., in: result),
+                        withTemplate: v
+                    )
+                }
             }
         }
         

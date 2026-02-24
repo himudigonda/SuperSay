@@ -145,7 +145,7 @@ struct MainDashboardView: View {
             HStack(spacing: 60) {
                 TransportButton(icon: "backward.fill", size: 20) { audio.seek(to: max(0, audio.progress - 0.1)) }
                 
-                Button { audio.togglePause() } label: {
+                Button { vm.togglePlayback() } label: {
                     ZStack {
                         Circle().fill(colorScheme == .dark ? Color.white : Color.black).frame(width: 72, height: 72)
                         Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")

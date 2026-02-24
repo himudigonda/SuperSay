@@ -159,6 +159,22 @@ class DashboardViewModel: ObservableObject {
         }
     }
     
+    func togglePlayback() {
+        if audio.duration == 0 {
+            // Show the error message in the UI pill
+            status = .error("Nothing to play. Select text and press Cmd+Shift+.")
+            
+            // Auto-clear the error and return to "READY" after 3 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                if case .error(let msg) = self.status, msg == "Nothing to play. Select text and press Cmd+Shift+." {
+                    self.status = .ready
+                }
+            }
+        } else {
+            audio.togglePause()
+        }
+    }
+    
     private func splitIntoSentences(_ text: String) -> [String] {
         // Use a simple split but handle common abbreviations
         // A better approach would be NSLinguisticTagger, but this is faster for TTS chunks

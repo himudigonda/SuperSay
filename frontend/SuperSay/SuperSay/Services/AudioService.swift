@@ -146,6 +146,9 @@ class AudioService: NSObject, ObservableObject {
     }
 
     func togglePause() {
+        // 🔒 FIX: Refuse to play if memory is completely empty
+        guard duration > 0 else { return } 
+        
         if playerNode.isPlaying {
             // Save accumulated hardware time before pausing
             if let nodeTime = playerNode.lastRenderTime,

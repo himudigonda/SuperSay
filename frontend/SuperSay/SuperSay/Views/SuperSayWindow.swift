@@ -203,7 +203,7 @@ struct SuperSayWindow: View {
                 .scaleEffect(x: 1, y: 0.5)
             
             HStack(spacing: 12) {
-                Button { audio.togglePause() } label: {
+                Button { vm.togglePlayback() } label: {
                     Image(systemName: audio.isPlaying ? "pause.fill" : "play.fill")
                 }
                 Button { audio.stop() } label: {
