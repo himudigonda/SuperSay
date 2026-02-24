@@ -3,6 +3,8 @@
 > **Turn any text on your Mac into cinematic, ultra-realistic AI speech.**
 
 <p align="center">
+  <img src="https://img.shields.io/badge/version-1.0.6-blue?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/status-production-success?style=for-the-badge" alt="Status" />
   <img src="https://img.shields.io/badge/macOS-14.0+-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Apple_Silicon-Native-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Apple Silicon" />
   <img src="https://img.shields.io/badge/Python-3.11+-3776AB?style=for-the-badge&logo=python&logoColor=white" alt="Python" />
@@ -104,13 +106,17 @@ graph TD
 Because SuperSay is currently an **Independent, Unsigned** project, macOS Gatekeeper will apply security blocks.
 
 ### 1. Bypass "App is Damaged" (Gatekeeper)
+
 Run this command in your Terminal after moving the app to `/Applications`:
+
 ```bash
 xattr -cr /Applications/SuperSay.app
 ```
 
 ### 2. Enable "Speak Selection" (Accessibility)
+
 If the shortcut fails to grab text:
+
 1. Go to **System Settings > Privacy & Security > Accessibility**.
 2. Remove SuperSay with the **minus (-)** button.
 3. Restart SuperSay and grant permission when prompted.
@@ -123,7 +129,7 @@ If the shortcut fails to grab text:
 | :--- | :--- |
 | **Speak Selection** | `Cmd + Shift + .` |
 | **Play / Pause** | `Cmd + Shift + /` |
-| **Stop Playback** |  `Cmd + Shift + ,` |
+| **Stop Playback** | `Cmd + Shift + ,` |
 | **Export to Desktop** | `Cmd + Shift + M` |
 
 ---
