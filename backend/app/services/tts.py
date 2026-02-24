@@ -34,11 +34,12 @@ class TTSEngine:
 
         import asyncio
 
-        # 1. Improved Splitting: Split on . ! ? : ; but group tiny fragments
+        # 1. Improved Splitting: Split on . ! ? : ; , but group tiny fragments
         raw_text = text.replace("\n", " ").strip()
         # Splits on terminal punctuation followed by a space
+        # FIX: Added comma to the regex split characters
         raw_segments = [
-            s.strip() for s in re.split(r"(?<=[.!?|:;]) +", raw_text) if s.strip()
+            s.strip() for s in re.split(r"(?<=[.!?|:;,]) +", raw_text) if s.strip()
         ]
 
         segments = []
@@ -46,13 +47,15 @@ class TTSEngine:
         for s in raw_segments:
             temp_seg += (" " + s) if temp_seg else s
             # Only finalize segment if it has enough words or a terminal mark
-            if len(temp_seg.split()) > 3 or any(temp_seg.endswith(p) for p in ".!?"):
+            # FIX: Finalize segment if it hits a hard terminal (.!?) OR if it's long enough and hits a comma (>= 5 words)
+            if len(temp_seg.split()) >= 5 or any(temp_seg.endswith(p) for p in ".!?"):
                 segments.append(temp_seg.strip())
                 temp_seg = ""
         if temp_seg:
             segments.append(temp_seg.strip())
 
-        pause_map = {".": 0.6, "!": 0.6, "?": 0.7, ":": 0.4, ";": 0.4, ",": 0.2}
+        # FIX: Dramatically increased silence gaps for a more cinematic/natural reading pace
+        pause_map = {".": 0.8, "!": 0.8, "?": 0.8, ":": 0.5, ";": 0.5, ",": 0.4}
 
         # Concurrency control: limit to 1 simultaneous ONNX thread to prevent espeak-ng global state corruption
         semaphore = asyncio.Semaphore(1)
