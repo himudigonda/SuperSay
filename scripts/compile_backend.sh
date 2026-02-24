@@ -1,43 +1,52 @@
 #!/bin/bash
 set -e
-echo "🚀 STARTING FINAL SURGICAL BUILD..."
+echo "🚀 STARTING NUCLEAR BACKEND BUILD..."
 
 # 1. Cleanup
 pkill -9 SuperSayServer || true
 rm -rf backend/dist backend/build
-rm -f backend/SuperSayServer.spec
 rm -f frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
 
 cd backend
+# Ensure venv exists
 uv sync
 
-# 2. SURGICALLY LOCATE ASSETS
-# This finds the actual files in your venv so we can force them into the bundle
-KOKORO_DIR=$(uv run python -c "import kokoro_onnx, os; print(os.path.dirname(kokoro_onnx.__file__))")
-ESPEAK_DIR=$(uv run python -c "import espeakng_loader, os; print(os.path.dirname(espeakng_loader.__file__))")
+# 2. LOCATE CRITICAL ASSETS
+PYTHON_EXEC="./.venv/bin/python"
+ESPEAK_PATH=$($PYTHON_EXEC -c "import os, espeakng_loader; print(os.path.dirname(espeakng_loader.__file__))")
+KOKORO_CONFIG=$($PYTHON_EXEC -c "import os, kokoro_onnx; print(os.path.join(os.path.dirname(kokoro_onnx.__file__), 'config.json'))")
 
-echo "📍 Found Kokoro at: $KOKORO_DIR"
-echo "📍 Found Espeak at: $ESPEAK_DIR"
+echo "📍 Config located at: $KOKORO_CONFIG"
 
 # 3. COMPILE
-# We manually map the internal config.json into the kokoro_onnx subfolder.
-# We DO NOT use --collect-all for kokoro_onnx to avoid conflicts.
-uv run pyinstaller --clean --noconsole --onedir --noconfirm --name "SuperSayServer" \
+# We remove hidden-import kokoro_onnx to let PyInstaller find it naturally first,
+# then we surgically repair the missing config.
+$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name "SuperSayServer" \
     --paths . \
     --add-data "kokoro-v1.0.onnx:." \
     --add-data "voices-v1.0.bin:." \
-    --add-data "$KOKORO_DIR/config.json:kokoro_onnx" \
-    --add-data "$ESPEAK_DIR:espeakng_loader" \
+    --add-data "$ESPEAK_PATH:espeakng_loader" \
     --collect-all "phonemizer" \
     --collect-all "language_tags" \
+    --collect-all "kokoro_onnx" \
     --hidden-import "uvicorn.loops.asyncio" \
     --hidden-import "uvicorn.protocols.http.h11_impl" \
     --hidden-import "fastapi" \
     --hidden-import "starlette" \
-    --hidden-import "kokoro_onnx" \
     app/main.py
 
-# 4. ZIP AND MOVE
+# 4. SURGICAL INJECTION (Double Check)
+# Even with collect-all, we force copy config.json if it's missing to be 100% sure.
+DEST_DIR="dist/SuperSayServer/_internal/kokoro_onnx"
+if [ ! -f "$DEST_DIR/config.json" ]; then
+    echo "💉 Manual injection of config.json required..."
+    mkdir -p "$DEST_DIR"
+    cp "$KOKORO_CONFIG" "$DEST_DIR/"
+else
+    echo "✅ config.json was collected automatically."
+fi
+
+# 5. ZIP AND MOVE
 echo "📦 Zipping backend..."
 cd dist
 zip -r -q SuperSayServer.zip SuperSayServer
@@ -47,4 +56,4 @@ echo "📦 Installing to Resources..."
 mkdir -p ../frontend/SuperSay/SuperSay/Resources/
 mv dist/SuperSayServer.zip ../frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
 
-echo "✅ [SUCCESS] All assets surgically bundled."
+echo "✅ Nuclear Build Complete."

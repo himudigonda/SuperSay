@@ -36,13 +36,10 @@ class LaunchManager: ObservableObject {
     func prepare() async {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
-        let executableURL = appSupport.appendingPathComponent("SuperSayServer/SuperSayServer")
         
-        // 1. If binary exists, we are potentially ready
-        if FileManager.default.fileExists(atPath: executableURL.path) {
-            self.isReady = true
-            return
-        }
+        // Target specifically the Server directory
+        let serverURL = appSupport.appendingPathComponent("SuperSayServer")
+        let executableURL = serverURL.appendingPathComponent("SuperSayServer")
         
         // 2. Extract
         guard let zipURL = Bundle.main.url(forResource: "SuperSayServer", withExtension: "zip") else {
@@ -51,21 +48,22 @@ class LaunchManager: ObservableObject {
         }
         
         do {
-            // --- FIX: Force Refresh ---
-            // We delete the old backend folder to ensure the new ZIP is always extracted.
-            // This prevents "sticky" broken builds from persisting in Application Support.
-            if FileManager.default.fileExists(atPath: appSupport.path) {
-                try FileManager.default.removeItem(at: appSupport)
+            // FIX: Only remove the server directory, PRESERVING LOGS
+            if FileManager.default.fileExists(atPath: serverURL.path) {
+                try FileManager.default.removeItem(at: serverURL)
             }
+            
+            // Ensure parent exists
             try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
             
             let unzip = Process()
             unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+            // Unzip into appSupport (it creates SuperSayServer folder)
             unzip.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
             try unzip.run()
             unzip.waitUntilExit()
             
-            // 3. CRITICAL: Set permissions immediately after unzip
+            // 3. Set permissions
             let chmod = Process()
             chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
             chmod.arguments = ["755", executableURL.path]
