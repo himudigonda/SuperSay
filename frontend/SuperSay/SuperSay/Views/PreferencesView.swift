@@ -1,13 +1,13 @@
-import SwiftUI
 import KeyboardShortcuts
+import SwiftUI
 
 struct PreferencesView: View {
     @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var launchManager: LaunchManager
-    
+
     @AppStorage("showMenuBarIcon") var showMenuBarIcon = true
-    
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
@@ -20,7 +20,7 @@ struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 8)
-                
+
                 // Section: Voice Engine
                 PreferenceSection(title: "Voice Engine", icon: "cpu") {
                     VStack(spacing: 20) {
@@ -46,7 +46,7 @@ struct PreferencesView: View {
                             .frame(width: 150)
                             .labelsHidden()
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Label("Speech Speed", systemImage: "gauge.with.needle")
@@ -57,10 +57,10 @@ struct PreferencesView: View {
                                     .foregroundStyle(.cyan)
                                     .fontWeight(.bold)
                             }
-                            Slider(value: $vm.speechSpeed, in: 0.5...2.0)
+                            Slider(value: $vm.speechSpeed, in: 0.5 ... 2.0)
                                 .tint(.cyan)
                         }
-                        
+
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
                                 Label("Master Volume", systemImage: "speaker.wave.3")
@@ -71,12 +71,12 @@ struct PreferencesView: View {
                                     .foregroundStyle(.cyan)
                                     .fontWeight(.bold)
                             }
-                            Slider(value: $vm.speechVolume, in: 0.0...1.5)
+                            Slider(value: $vm.speechVolume, in: 0.0 ... 1.5)
                                 .tint(.cyan)
                         }
                     }
                 }
-                
+
                 // Section: Audio Environment
                 PreferenceSection(title: "Audio Environment", icon: "hifispeaker") {
                     VStack(alignment: .leading, spacing: 16) {
@@ -89,9 +89,9 @@ struct PreferencesView: View {
                                     .foregroundStyle(.secondary)
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         Toggle(isOn: $vm.cleanURLs) {
                             VStack(alignment: .leading) {
                                 Text("Sanitize URLs")
@@ -103,7 +103,7 @@ struct PreferencesView: View {
                         }
                     }
                 }
-                
+
                 // Section: Keyboard Shortcuts
                 PreferenceSection(title: "Shortcuts", icon: "keyboard") {
                     VStack(spacing: 0) {
@@ -114,9 +114,9 @@ struct PreferencesView: View {
                         ShortcutRow(title: "Stop Playback", name: .stopText)
                         Divider().padding(.vertical, 8)
                         ShortcutRow(title: "Export to Desktop", name: .exportAudio)
-                        
+
                         Divider().padding(.vertical, 16)
-                        
+
                         HStack {
                             Text("Shortcuts are global and work from any app.")
                                 .font(vm.appFont(size: 12))
@@ -131,7 +131,7 @@ struct PreferencesView: View {
                         }
                     }
                 }
-                
+
                 // Section: System & Appearance
                 PreferenceSection(title: "Application", icon: "window.badge.magnifyingglass") {
                     VStack(alignment: .leading, spacing: 16) {
@@ -139,17 +139,17 @@ struct PreferencesView: View {
                             Text("Theme")
                                 .font(vm.appFont(size: 14))
                             Spacer()
-                                Picker("", selection: $vm.appTheme) {
-                                    Text("System").tag("system")
-                                    Text("Light").tag("light")
-                                    Text("Dark").tag("dark")
-                                }
+                            Picker("", selection: $vm.appTheme) {
+                                Text("System").tag("system")
+                                Text("Light").tag("light")
+                                Text("Dark").tag("dark")
+                            }
                             .pickerStyle(.segmented)
                             .frame(width: 200)
                         }
-                        
+
                         Divider()
-                        
+
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Typography")
@@ -169,7 +169,7 @@ struct PreferencesView: View {
                                     Text("Poppins").tag("Poppins")
                                 }
                                 .frame(width: 200)
-                                
+
                                 Button {
                                     vm.showFontPanel()
                                 } label: {
@@ -183,26 +183,26 @@ struct PreferencesView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        
+
                         Divider()
-                        
+
                         Toggle(isOn: $launchManager.isLaunchAtLoginEnabled) {
                             Text("Start at Login")
                                 .font(vm.appFont(size: 14))
                         }
                         .toggleStyle(.switch)
-                        
+
                         Divider()
-                        
+
                         Toggle(isOn: $showMenuBarIcon) {
                             Text("Show Menu Bar Icon")
                                 .font(vm.appFont(size: 14))
                         }
                         .toggleStyle(.switch)
-                        
+
                         Divider()
-                        
-                         Toggle(isOn: $vm.telemetryEnabled) {
+
+                        Toggle(isOn: $vm.telemetryEnabled) {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Anonymous Analytics")
                                     .font(vm.appFont(size: 14, weight: .bold))
@@ -212,7 +212,7 @@ struct PreferencesView: View {
                             }
                         }
                         .help("We collect: App Launches, Character Counts, and Export Counts. No text content or personal data is ever recorded or transmitted.")
-                        
+
                         Divider()
 
                         HStack {
@@ -223,16 +223,16 @@ struct PreferencesView: View {
                                     .font(vm.appFont(size: 13, weight: .medium))
                             }
                             .buttonStyle(.plain)
-                            
+
                             Spacer()
-                            
+
                             Text("v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"))
                                 .font(vm.appFont(size: 11))
                                 .foregroundStyle(.secondary)
                         }
-                        
+
                         Divider()
-                        
+
                         Button {
                             audio.exportToDesktop()
                         } label: {
@@ -244,7 +244,7 @@ struct PreferencesView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(.cyan)
                         .help("Manually export the most recently generated audio clip.")
-                        
+
                         Button {
                             vm.exportLogs()
                         } label: {
@@ -262,7 +262,7 @@ struct PreferencesView: View {
             .frame(maxWidth: 800)
         }
     }
-    
+
     private func resetShortcuts() {
         for name in KeyboardShortcuts.Name.allCases {
             KeyboardShortcuts.reset(name)
@@ -274,7 +274,7 @@ struct ShortcutRow: View {
     @EnvironmentObject var vm: DashboardViewModel
     let title: String
     let name: KeyboardShortcuts.Name
-    
+
     var body: some View {
         HStack {
             Text(title)
@@ -290,13 +290,13 @@ struct PreferenceSection<Content: View>: View {
     let title: String
     let icon: String
     let content: Content
-    
+
     init(title: String, icon: String, @ViewBuilder content: () -> Content) {
         self.title = title
         self.icon = icon
         self.content = content()
     }
-    
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 8) {
@@ -308,7 +308,7 @@ struct PreferenceSection<Content: View>: View {
                     .foregroundStyle(.secondary)
                     .kerning(1)
             }
-            
+
             VStack {
                 content
             }

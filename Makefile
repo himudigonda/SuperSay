@@ -88,7 +88,10 @@ lint:
 
 format:
 	@echo "✨ Formatting Python..."
+	cd backend && uv run ruff check --fix .
 	cd backend && uv run black .
+	@echo "✨ Formatting Swift..."
+	if which swiftformat >/dev/null; then swiftformat . --swiftversion 6; else echo "⚠️ swiftformat not installed"; fi
 
 # --- 📊 BENCHMARKS ---
 benchmark:
