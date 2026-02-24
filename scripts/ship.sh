@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-# Usage: ./scripts/ship.sh 1.0.5
+# Usage: ./scripts/ship.sh 1.0.6
 VERSION=$1
 
 if [ -z "$VERSION" ]; then
