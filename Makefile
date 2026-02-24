@@ -21,6 +21,9 @@ setup:
 	cd backend && uv sync
 	@echo "📦 Checking Swift Environment..."
 	xcode-select -p || echo "⚠️ Xcode not found!"
+	@echo "🛠️ Configuring Git Hooks..."
+	@git config core.hooksPath .githooks
+	@echo "✅ Setup Complete."
 
 # --- 🐍 BACKEND ---
 backend:

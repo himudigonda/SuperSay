@@ -10,7 +10,8 @@ enum SelectionManager {
 
         if result == .success {
             var selectedText: AnyObject?
-            guard let element = focusedElement as? AXUIElement else { return nil }
+            // swiftlint:disable:next force_cast
+            let element = focusedElement as! AXUIElement
             let textResult = AXUIElementCopyAttributeValue(element, kAXSelectedTextAttribute as CFString, &selectedText)
 
             if textResult == .success, let text = selectedText as? String, !text.isEmpty {

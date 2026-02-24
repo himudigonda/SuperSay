@@ -94,10 +94,10 @@ struct UpdateView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
-                        ForEach(vm.allRelevantReleases, id: \.tag_name) { release in
+                        ForEach(vm.allRelevantReleases, id: \.tagName) { release in
                             VStack(alignment: .leading, spacing: 8) {
                                 HStack {
-                                    Text(release.tag_name)
+                                    Text(release.tagName)
                                         .font(vm.appFont(size: 12, weight: .black))
                                         .padding(.horizontal, 8)
                                         .padding(.vertical, 4)
@@ -112,7 +112,7 @@ struct UpdateView: View {
                                 MarkdownRenderView(markdown: release.body, vm: vm)
                             }
 
-                            if release.tag_name != vm.allRelevantReleases.last?.tag_name {
+                            if release.tagName != vm.allRelevantReleases.last?.tagName {
                                 Divider().opacity(0.1)
                             }
                         }
@@ -209,7 +209,7 @@ struct UpdateView: View {
         }
 
         errorMessage = nil
-        downloader.download(url: asset.browser_download_url)
+        downloader.download(url: asset.browserDownloadUrl)
     }
 
     private func autoInstall() {
