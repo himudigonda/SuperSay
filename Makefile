@@ -43,7 +43,7 @@ app:
 		-configuration $(CONFIG) \
 		-derivedDataPath $(BUILD_DIR)/DerivedData \
 		-quiet \
-		clean build
+		build
 	@echo "📦 Injecting Custom Fonts..."
 	mkdir -p $(APP_PATH)/Contents/Resources/Fonts
 	cp frontend/SuperSay/SuperSay/Resources/Fonts/*.ttf $(APP_PATH)/Contents/Resources/Fonts/

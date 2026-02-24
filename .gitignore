@@ -71,3 +71,5 @@ RELEASE_NOTES.md
 
 backend/benchmarks/pipeline_stats.json
 backend/benchmarks/results.json
+RELEASE_NOTES.tmp
+RELEASE_NOTES.all
