@@ -32,11 +32,11 @@ git tag -a v$VERSION -m "$APP_NAME v$VERSION: Definitive Edition"
 git push origin v$VERSION
 
 echo "🚀 PHASE 2: GitHub Release..."
-cat << EOF > RELEASE_NOTES.md
-## 🚀 SuperSay v$VERSION
-- **Zero-Latency Streaming:** Parallel inference engine for instant speech.
-- **Atomic Audio:** Fixed word repetition and merging bugs.
-- **Factory Reset:** Added 'make nuke' for easier troubleshooting.
+# Extract section from CHANGELOG.md for this version
+# This finds the line with the version and reads until the next version header
+sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' > RELEASE_NOTES.md
+
+cat << EOF >> RELEASE_NOTES.md
 
 ## ⚠️ INSTALLATION NOTE (Gatekeeper)
 Because this app is unsigned, macOS will flag it as damaged. Run this in Terminal:
