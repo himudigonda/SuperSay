@@ -2,6 +2,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
+from app.services.audio import AudioService
 from app.services.tts import TTSEngine
 
 
