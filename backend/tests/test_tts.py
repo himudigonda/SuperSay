@@ -12,9 +12,18 @@ class MockKokoro:
         return np.ones(24000, dtype=np.float32), None
 
 
-@pytest.fixture
-def mock_kokoro():
-    return MockKokoro()
+@pytest.fixture(autouse=True)
+def setup_tts_engine():
+    # Only initialize the executor for tests, don't load the real model
+    import concurrent.futures
+
+    if TTSEngine._executor is None:
+        TTSEngine._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    # Reset state
+    TTSEngine._model = None
+    yield
+    # No cleanup needed for ThreadPoolExecutor as it's a singleton for the class
 
 
 @pytest.mark.asyncio

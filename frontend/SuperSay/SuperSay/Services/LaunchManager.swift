@@ -51,6 +51,12 @@ class LaunchManager: ObservableObject {
         }
         
         do {
+            // --- FIX: Force Refresh ---
+            // We delete the old backend folder to ensure the new ZIP is always extracted.
+            // This prevents "sticky" broken builds from persisting in Application Support.
+            if FileManager.default.fileExists(atPath: appSupport.path) {
+                try FileManager.default.removeItem(at: appSupport)
+            }
             try FileManager.default.createDirectory(at: appSupport, withIntermediateDirectories: true)
             
             let unzip = Process()

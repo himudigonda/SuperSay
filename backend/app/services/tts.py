@@ -1,5 +1,5 @@
 import asyncio
-import concurrent.futures  # <--- NEW IMPORT
+import concurrent.futures
 import re
 from typing import AsyncGenerator
 
@@ -12,15 +12,19 @@ from kokoro_onnx import Kokoro
 class TTSEngine:
     _instance = None
     _model: Kokoro = None
-
-    # 🔒 THE FIX: A dedicated, single background thread for ALL Kokoro/espeak operations.
-    # This guarantees espeak-ng never runs concurrently and always stays on the
-    # exact same C-thread, eliminating cross-thread memory leaks and hallucinations.
-    _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    _executor = None  # <--- CHANGED: Don't start threads at import time!
 
     @classmethod
     def initialize(cls):
-        """Loads the ONNX model into memory."""
+        """Loads the ONNX model and ThreadPool into memory."""
+        # 1. Initialize the Executor lazily
+        if cls._executor is None:
+            # 🔒 A dedicated, single background thread for ALL Kokoro/espeak operations.
+            # This guarantees espeak-ng never runs concurrently and always stays on the
+            # exact same C-thread, eliminating cross-thread memory leaks and hallucinations.
+            cls._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+        # 2. Initialize the Model
         if cls._model is None:
             print(f"[TTS] Loading model from: {settings.MODEL_PATH}")
             try:
@@ -34,7 +38,7 @@ class TTSEngine:
     async def generate(
         cls, text: str, voice: str, speed: float
     ) -> AsyncGenerator[np.ndarray, None]:
-        if not cls._model:
+        if not cls._model or not cls._executor:
             raise RuntimeError("Model not initialized. Call initialize() first.")
 
         # 1. Improved Splitting: Split on . ! ? : ; , but group tiny fragments
@@ -75,28 +79,26 @@ class TTSEngine:
         if not segments:
             return
 
-        # --- OPTIMIZATION: PRIORITY QUEUEING ---
-        first_audio = await generate_segment(segments[0])
-        if first_audio is not None:
-            first_audio = AudioService.apply_fade(
-                first_audio, fade_in=False, fade_out=True
-            )
-            last_char = segments[0].strip()[-1] if segments[0].strip() else ""
-            silence_sec = pause_map.get(last_char, 0.2)
-            silence = AudioService.generate_silence(silence_sec)
-            yield np.concatenate([first_audio, silence])
+        # 2. Strict Sequential Generation Loop
+        # We removed the 'tasks = [create_task...]' list.
+        # We now generate -> yield -> generate -> yield.
+        # This keeps memory usage low and prevents espeak from choking on a full queue.
+        for i, seg_text in enumerate(segments):
+            audio = await generate_segment(seg_text)
 
-        if len(segments) > 1:
-            # Because the executor has max_workers=1, scheduling them concurrently
-            # simply queues them in exact order. They will execute 100% safely.
-            tasks = [asyncio.create_task(generate_segment(s)) for s in segments[1:]]
+            if audio is not None:
+                # Logic: Don't fade IN the first segment (keep the attack). Fade IN all others.
+                # Always fade OUT to prevent clicks.
+                is_first = i == 0
 
-            for i, task in enumerate(tasks):
-                audio = await task
-                if audio is not None:
-                    seg_text = segments[i + 1]
-                    audio = AudioService.apply_fade(audio, fade_in=True, fade_out=True)
-                    last_char = seg_text.strip()[-1] if seg_text.strip() else ""
-                    silence_sec = pause_map.get(last_char, 0.2)
-                    silence = AudioService.generate_silence(silence_sec)
-                    yield np.concatenate([audio, silence])
+                audio = AudioService.apply_fade(
+                    audio, fade_in=not is_first, fade_out=True
+                )
+
+                last_char = seg_text.strip()[-1] if seg_text.strip() else ""
+                silence_sec = pause_map.get(
+                    last_char, 0.2
+                )  # Default small pause if no punctuation
+                silence = AudioService.generate_silence(silence_sec)
+
+                yield np.concatenate([audio, silence])

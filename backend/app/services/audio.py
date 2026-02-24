@@ -52,12 +52,12 @@ class AudioService:
 
         # Apply Fade In
         if fade_in and fade_samples > 0:
-            fade_in_curve = np.linspace(0.0, 1.0, fade_samples).astype(np.float32)
+            fade_in_curve = np.linspace(0.6, 1.0, fade_samples).astype(np.float32)
             samples[:fade_samples] *= fade_in_curve
 
         # Apply Fade Out
         if fade_out and fade_samples > 0:
-            fade_out_curve = np.linspace(1.0, 0.0, fade_samples).astype(np.float32)
+            fade_out_curve = np.linspace(1.0, 0.6, fade_samples).astype(np.float32)
             samples[-fade_samples:] *= fade_out_curve
 
         return samples
