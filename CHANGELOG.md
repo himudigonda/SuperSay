@@ -15,3 +15,10 @@
 #### 📦 Build & Infrastructure
 *   **"Nuclear" Build Script:** Completely rewrote `scripts/compile_backend.sh`. It now manually locates and injects `config.json` into the PyInstaller bundle to fix the `FileNotFoundError` preventing backend startup.
 *   **Version Bump:** Project updated to **1.0.6**.
+
+
+### ⚠️ INSTALLATION NOTE (Gatekeeper)
+Because this app is unsigned, macOS will flag it as damaged. Run this in Terminal:
+```bash
+xattr -cr /Applications/SuperSay.app
+```
