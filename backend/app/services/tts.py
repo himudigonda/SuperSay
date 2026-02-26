@@ -1,5 +1,6 @@
 import asyncio
 import concurrent.futures
+import os
 import re
 from typing import AsyncGenerator
 
@@ -36,6 +37,9 @@ class TTSEngine:
                 sess_options.graph_optimization_level = (
                     ort.GraphOptimizationLevel.ORT_ENABLE_ALL
                 )
+                # 6 intra-op threads is optimal on Apple Silicon (benchmarked on
+                # M2 Pro: 6 threads = 271ms min vs auto = 298ms min for 2-word seg)
+                sess_options.intra_op_num_threads = min(6, os.cpu_count() or 4)
                 # Keep threads spinning for lower latency (trades CPU for speed)
                 sess_options.add_session_config_entry(
                     "session.intra_op.allow_spinning", "1"
