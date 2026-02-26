@@ -100,8 +100,8 @@ class AudioService: NSObject, ObservableObject {
                 }
             })
 
-            // Start playback after minimal safety buffer (50ms = 2400 bytes at 24kHz 16-bit mono)
-            if !hasStartedPlayback, lastAudioData.count > 2400 {
+            // Start playback after minimal safety buffer (20ms = 960 bytes at 24kHz 16-bit mono)
+            if !hasStartedPlayback, lastAudioData.count > 960 {
                 startPlayback()
             }
         }
