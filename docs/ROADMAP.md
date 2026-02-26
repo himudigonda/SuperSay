@@ -7,12 +7,10 @@
 - [x] Global Shortcuts.
 - [x] The Vault (Local History).
 
-## 🟡 Phase 2: Academic & Productivity (Current)
+## 🟡 Phase 2: Productivity (Current)
 
-- [x] PDF Academic Cleaning (Citation stripping).
 - [x] Parallel Sentence Inference.
 - [ ] **Native Safari/Chrome Extension** (One-click send).
-- [ ] **Batch Processing** (Queue multiple PDFs).
 
 ## 🔴 Phase 3: Advanced Features (Planned)
 

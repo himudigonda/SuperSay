@@ -6,13 +6,12 @@ enum TextProcessor {
         var cleanHandles: Bool
         var fixLigatures: Bool
         var expandAbbr: Bool
-        var academicClean: Bool = false // NEW: Support for academic paper cleaning
     }
 
     static func sanitize(_ text: String, options: Options) -> String {
         var result = text
 
-        // 1. Hyphenation Fix (Crucial for PDFs)
+        // 1. Hyphenation Fix
         // Detects "word- \n next" and joins them
         result = result.replacingOccurrences(of: "([a-zA-Z])- [\\r\\n]+([a-zA-Z])", with: "$1$2", options: .regularExpression)
         result = result.replacingOccurrences(of: "([a-zA-Z])-\\s+[\\r\\n]+([a-zA-Z])", with: "$1$2", options: .regularExpression)
@@ -23,25 +22,6 @@ enum TextProcessor {
             result = result.replacingOccurrences(of: "f f", with: "ff")
             result = result.replacingOccurrences(of: "n t", with: "nt")
             result = result.replacingOccurrences(of: "f j", with: "fj")
-        }
-
-        if options.academicClean {
-            // A. Remove bracketed citations like [1], [1, 2], [1-5]
-            result = result.replacingOccurrences(of: "\\[[0-9,\\-\\s]+\\]", with: "", options: .regularExpression)
-
-            // B. Remove parenthetical citations like (Smith, 2020) or (Doe et al., 2018)
-            // This is trickier, we look for (Name, Year)
-            let citationRegex = "\\([A-Z][a-zA-Z\\s\\.]+,\\s?[12][0-9]{3}\\)"
-            result = result.replacingOccurrences(of: citationRegex, with: "", options: .regularExpression)
-
-            // C. Remove IEEE style citations at end of sentence
-            result = result.replacingOccurrences(of: "\\s\\[\\d+\\]", with: "", options: .regularExpression)
-
-            // D. Remove common mathematical notation noise for TTS
-            let mathSymbols = ["∑", "∏", "∫", "∂", "∆", "∇", "∈", "∉", "∋", "∌", "∗", "∘", "≈", "≠", "≡", "≤", "≥"]
-            for s in mathSymbols {
-                result = result.replacingOccurrences(of: s, with: " ")
-            }
         }
 
         if options.cleanURLs {

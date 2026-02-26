@@ -7,7 +7,6 @@ struct SuperSayApp: App {
     // 1. Single Sources of Truth (Services)
     @StateObject private var audio: AudioService
     @StateObject private var history: HistoryManager
-    @StateObject private var pdf: PDFService
     @StateObject private var launchManager: LaunchManager
 
     /// 2. Logic Controller (ViewModel)
@@ -38,7 +37,6 @@ struct SuperSayApp: App {
         // Create instances
         let audioInstance = AudioService()
         let historyInstance = HistoryManager()
-        let pdfInstance = PDFService()
         let launchInstance = LaunchManager()
         let backendInstance = BackendService()
         let systemInstance = SystemService()
@@ -54,7 +52,6 @@ struct SuperSayApp: App {
         // Assign to StateObjects
         _audio = StateObject(wrappedValue: audioInstance)
         _history = StateObject(wrappedValue: historyInstance)
-        _pdf = StateObject(wrappedValue: pdfInstance)
         _launchManager = StateObject(wrappedValue: launchInstance)
         _dashboardVM = StateObject(wrappedValue: vmInstance)
 
@@ -154,7 +151,6 @@ struct SuperSayApp: App {
                 .environmentObject(dashboardVM)
                 .environmentObject(audio)
                 .environmentObject(history)
-                .environmentObject(pdf)
                 .environmentObject(launchManager)
         }
         .windowStyle(.hiddenTitleBar)
