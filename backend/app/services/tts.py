@@ -1,6 +1,5 @@
 import asyncio
 import concurrent.futures
-import os
 import re
 from typing import AsyncGenerator
 
@@ -42,12 +41,13 @@ class TTSEngine:
                     "session.intra_op.allow_spinning", "1"
                 )
 
-                providers = cls._get_providers()
+                # CPU-only: CoreML partitions only 43% of Kokoro's nodes, and the
+                # data transfer overhead between CoreML and CPU makes it slower overall
                 session = ort.InferenceSession(
-                    settings.MODEL_PATH, sess_options, providers=providers
+                    settings.MODEL_PATH,
+                    sess_options,
+                    providers=["CPUExecutionProvider"],
                 )
-                active = session.get_providers()
-                print(f"[TTS] Active providers: {active}")
 
                 cls._model = Kokoro.from_session(session, settings.VOICES_PATH)
                 print("[TTS] Model loaded, running warm-up...")
@@ -59,32 +59,6 @@ class TTSEngine:
             except Exception as e:
                 print(f"[TTS] Fatal Error: {e}")
                 raise e
-
-    @classmethod
-    def _get_providers(cls):
-        """Select execution providers with CoreML on macOS if available."""
-        available = ort.get_available_providers()
-        if "CoreMLExecutionProvider" in available:
-            cache_dir = os.path.join(
-                os.path.expanduser("~"),
-                "Library",
-                "Caches",
-                "SuperSay",
-                "coreml",
-            )
-            os.makedirs(cache_dir, exist_ok=True)
-            return [
-                (
-                    "CoreMLExecutionProvider",
-                    {
-                        "MLComputeUnits": "ALL",
-                        "RequireStaticInputShapes": "0",
-                        "ModelCacheDirectory": cache_dir,
-                    },
-                ),
-                ("CPUExecutionProvider", {}),
-            ]
-        return ["CPUExecutionProvider"]
 
     # Maximum words for the first segment (keeps TTFA low).
     # Profiling: 3 words ≈ 358ms, 4 words ≈ 374ms (saves ~16ms)
