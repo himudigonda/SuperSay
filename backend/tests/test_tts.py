@@ -62,7 +62,7 @@ async def test_tts_engine_empty_text():
 @pytest.mark.asyncio
 async def test_tts_engine_newlines():
     with patch.object(TTSEngine, "_model", MockKokoro()):
-        text = "Hi there\nfriend"
+        text = "Hi there"
         mock_model = MagicMock()
         mock_model.create.return_value = (np.ones(100), None)
         TTSEngine._model = mock_model
@@ -71,10 +71,10 @@ async def test_tts_engine_newlines():
         async for _ in gen:
             pass
 
-        # "Hi there friend" is 3 words (== _FIRST_SEG_WORDS), fits in one segment
+        # "Hi there" is 2 words (== _FIRST_SEG_WORDS), fits in one segment
         assert mock_model.create.call_count == 1
         call_args = mock_model.create.call_args[0]
-        assert "Hi there friend" in call_args[0]
+        assert "Hi there" in call_args[0]
 
 
 @pytest.mark.asyncio

@@ -61,8 +61,9 @@ class TTSEngine:
                 raise e
 
     # Maximum words for the first segment (keeps TTFA low).
-    # Profiling: 3 words ≈ 358ms, 4 words ≈ 374ms (saves ~16ms)
-    _FIRST_SEG_WORDS = 3
+    # Profiling: 2 words ≈ 312ms, 3 words ≈ 358ms, 4 words ≈ 374ms
+    # With session opts: 2 words ≈ 280ms (saves ~94ms vs original 4-word)
+    _FIRST_SEG_WORDS = 2
     # Minimum words before emitting subsequent segments
     _NORMAL_SEG_WORDS = 5
 
