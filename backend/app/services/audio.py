@@ -16,6 +16,13 @@ _FADE_SAMPLES = int(0.05 * 24000)  # 1200 samples at 24kHz
 _FADE_IN_CURVE = np.linspace(0.6, 1.0, _FADE_SAMPLES, dtype=np.float32)
 _FADE_OUT_CURVE = np.linspace(1.0, 0.6, _FADE_SAMPLES, dtype=np.float32)
 
+# Pre-computed silence arrays for common pause durations (eliminates np.zeros per segment)
+_SILENCE_CACHE: dict[float, np.ndarray] = {}
+for _dur in (0.35, 0.2, 0.12, 0.1):
+    _arr = np.zeros(int(_dur * 24000), dtype=np.float32)
+    _arr.flags.writeable = False  # Immutable — safe to share without copies
+    _SILENCE_CACHE[_dur] = _arr
+
 
 class AudioService:
     @staticmethod
@@ -68,6 +75,14 @@ class AudioService:
                 samples[-fade_len:] *= np.linspace(1.0, 0.6, fade_len, dtype=np.float32)
 
         return samples
+
+    @staticmethod
+    def get_silence(duration_sec: float, sample_rate: int = 24000) -> np.ndarray:
+        """Return a silence array, using the pre-computed cache for common durations."""
+        cached = _SILENCE_CACHE.get(duration_sec)
+        if cached is not None:
+            return cached
+        return np.zeros(int(duration_sec * sample_rate), dtype=np.float32)
 
     @staticmethod
     def generate_silence(

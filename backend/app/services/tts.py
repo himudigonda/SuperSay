@@ -1,9 +1,11 @@
 import asyncio
 import concurrent.futures
+import os
 import re
 from typing import AsyncGenerator
 
 import numpy as np
+import onnxruntime as ort
 from app.core.config import settings
 from app.services.audio import AudioService
 from kokoro_onnx import Kokoro
@@ -16,7 +18,7 @@ class TTSEngine:
 
     @classmethod
     def initialize(cls):
-        """Loads the ONNX model and ThreadPool into memory."""
+        """Loads the ONNX model with optimized session and warms up inference."""
         # 1. Initialize the Executor lazily
         if cls._executor is None:
             # A dedicated, single background thread for ALL Kokoro/espeak operations.
@@ -24,18 +26,69 @@ class TTSEngine:
             # exact same C-thread, eliminating cross-thread memory leaks and hallucinations.
             cls._executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
-        # 2. Initialize the Model
+        # 2. Initialize the Model with optimized ONNX session
         if cls._model is None:
             print(f"[TTS] Loading model from: {settings.MODEL_PATH}")
             try:
-                cls._model = Kokoro(settings.MODEL_PATH, settings.VOICES_PATH)
-                print("[TTS] ✅ Model Loaded Successfully")
+                sess_options = ort.SessionOptions()
+                sess_options.enable_mem_pattern = True
+                sess_options.enable_cpu_mem_arena = True
+                sess_options.execution_mode = ort.ExecutionMode.ORT_SEQUENTIAL
+                sess_options.graph_optimization_level = (
+                    ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+                )
+                # Keep threads spinning for lower latency (trades CPU for speed)
+                sess_options.add_session_config_entry(
+                    "session.intra_op.allow_spinning", "1"
+                )
+
+                providers = cls._get_providers()
+                session = ort.InferenceSession(
+                    settings.MODEL_PATH, sess_options, providers=providers
+                )
+                active = session.get_providers()
+                print(f"[TTS] Active providers: {active}")
+
+                cls._model = Kokoro.from_session(session, settings.VOICES_PATH)
+                print("[TTS] Model loaded, running warm-up...")
+
+                # Warm-up: first inference is 2-5x slower due to memory allocation
+                # and espeak-ng phonemizer initialization
+                cls._model.create("Hello.", "af_bella", 1.0, "en-us")
+                print("[TTS] Ready")
             except Exception as e:
-                print(f"[TTS] ❌ Fatal Error: {e}")
+                print(f"[TTS] Fatal Error: {e}")
                 raise e
 
-    # Maximum words for the first segment (keeps TTFA low)
-    _FIRST_SEG_WORDS = 4
+    @classmethod
+    def _get_providers(cls):
+        """Select execution providers with CoreML on macOS if available."""
+        available = ort.get_available_providers()
+        if "CoreMLExecutionProvider" in available:
+            cache_dir = os.path.join(
+                os.path.expanduser("~"),
+                "Library",
+                "Caches",
+                "SuperSay",
+                "coreml",
+            )
+            os.makedirs(cache_dir, exist_ok=True)
+            return [
+                (
+                    "CoreMLExecutionProvider",
+                    {
+                        "MLComputeUnits": "ALL",
+                        "RequireStaticInputShapes": "0",
+                        "ModelCacheDirectory": cache_dir,
+                    },
+                ),
+                ("CPUExecutionProvider", {}),
+            ]
+        return ["CPUExecutionProvider"]
+
+    # Maximum words for the first segment (keeps TTFA low).
+    # Profiling: 3 words ≈ 358ms, 4 words ≈ 374ms (saves ~16ms)
+    _FIRST_SEG_WORDS = 3
     # Minimum words before emitting subsequent segments
     _NORMAL_SEG_WORDS = 5
 
@@ -123,7 +176,7 @@ class TTSEngine:
                     "en-us",
                 )
             except Exception as e:
-                print(f"[TTS] ❌ Model Error on '{seg_text[:30]}': {e}")
+                print(f"[TTS] Model Error on '{seg_text[:30]}': {e}")
                 continue
 
             if audio is None:
@@ -134,9 +187,9 @@ class TTSEngine:
             # Apply fades: skip fade-in on first segment to preserve attack
             audio = AudioService.apply_fade(audio, fade_in=not is_first, fade_out=True)
 
-            # Append inter-segment silence
+            # Append inter-segment silence using pre-computed arrays
             last_char = seg_text.strip()[-1] if seg_text.strip() else ""
             silence_sec = pause_map.get(last_char, 0.1)
-            silence = AudioService.generate_silence(silence_sec)
+            silence = AudioService.get_silence(silence_sec)
 
             yield np.concatenate([audio, silence])

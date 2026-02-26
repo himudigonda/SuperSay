@@ -62,7 +62,7 @@ async def test_tts_engine_empty_text():
 @pytest.mark.asyncio
 async def test_tts_engine_newlines():
     with patch.object(TTSEngine, "_model", MockKokoro()):
-        text = "Line one\nLine two"
+        text = "Hi there\nfriend"
         mock_model = MagicMock()
         mock_model.create.return_value = (np.ones(100), None)
         TTSEngine._model = mock_model
@@ -71,17 +71,19 @@ async def test_tts_engine_newlines():
         async for _ in gen:
             pass
 
-        # Newlines are replaced by space, so it should be one sentence if no punctuation
+        # "Hi there friend" is 3 words (== _FIRST_SEG_WORDS), fits in one segment
         assert mock_model.create.call_count == 1
         call_args = mock_model.create.call_args[0]
-        assert "Line one Line two" in call_args[0]
+        assert "Hi there friend" in call_args[0]
 
 
 @pytest.mark.asyncio
 async def test_tts_engine_fade_logic():
     # Verify that the first segment has fade_in=False and subsequent have fade_in=True
     with patch.object(TTSEngine, "_model", MockKokoro()):
-        text = "The quick brown fox. Jumps over the lazy dog."
+        # "Good morning. How are you today?" → 2 segments:
+        # "Good morning." (2 words, ≤ _FIRST_SEG_WORDS) and "How are you today?" (4 words)
+        text = "Good morning. How are you today?"
 
         mock_model = MagicMock()
         mock_model.create.return_value = (np.ones(100), None)
