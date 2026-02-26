@@ -81,7 +81,7 @@ async def test_tts_engine_newlines():
 async def test_tts_engine_fade_logic():
     # Verify that the first segment has fade_in=False and subsequent have fade_in=True
     with patch.object(TTSEngine, "_model", MockKokoro()):
-        text = "First sentence. Second sentence."
+        text = "The quick brown fox. Jumps over the lazy dog."
 
         mock_model = MagicMock()
         mock_model.create.return_value = (np.ones(100), None)

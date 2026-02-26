@@ -4,6 +4,18 @@ import wave
 
 import numpy as np
 
+# Pre-computed WAV header for streaming (44 bytes, sizes set to zero for streaming)
+_WAV_HEADER = bytearray(44)
+struct.pack_into("<4sI4s", _WAV_HEADER, 0, b"RIFF", 0, b"WAVE")
+struct.pack_into("<4sIHHIIHH", _WAV_HEADER, 12, b"fmt ", 16, 1, 1, 24000, 48000, 2, 16)
+struct.pack_into("<4sI", _WAV_HEADER, 36, b"data", 0)
+_WAV_HEADER_BYTES = bytes(_WAV_HEADER)
+
+# Pre-computed fade curves (avoid re-allocating on every call)
+_FADE_SAMPLES = int(0.05 * 24000)  # 1200 samples at 24kHz
+_FADE_IN_CURVE = np.linspace(0.6, 1.0, _FADE_SAMPLES, dtype=np.float32)
+_FADE_OUT_CURVE = np.linspace(1.0, 0.6, _FADE_SAMPLES, dtype=np.float32)
+
 
 class AudioService:
     @staticmethod
@@ -11,18 +23,14 @@ class AudioService:
         """
         Clips, normalizes, and encodes raw float samples into a WAV container.
         """
-        # 1. Digital Boost / Unconditional Clipping to prevent integer overflow
         samples = np.clip(samples * volume, -1.0, 1.0)
-
-        # 2. Convert to 16-bit PCM
         pcm_data = (samples * 32767).astype(np.int16)
 
-        # 3. Write WAV Header
         buffer = io.BytesIO()
         with wave.open(buffer, "wb") as wav_file:
-            wav_file.setnchannels(1)  # Mono
-            wav_file.setsampwidth(2)  # 2 bytes = 16-bit
-            wav_file.setframerate(24000)  # Kokoro standard
+            wav_file.setnchannels(1)
+            wav_file.setsampwidth(2)
+            wav_file.setframerate(24000)
             wav_file.writeframes(pcm_data.tobytes())
 
         return buffer.getvalue()
@@ -30,35 +38,34 @@ class AudioService:
     @staticmethod
     def apply_fade(
         samples: np.ndarray,
-        duration_sec: float = 0.05,
-        sample_rate: int = 24000,
         fade_in: bool = True,
         fade_out: bool = True,
     ) -> np.ndarray:
         """
-        Applies a linear fade-in and fade-out to the audio samples to prevent popping
-        at sentence boundaries.
+        Applies pre-computed fade curves to prevent popping at sentence boundaries.
         """
-        if len(samples) == 0:
+        n = len(samples)
+        if n == 0:
             return samples
 
-        # FIX: Operate on a copy to ensure we don't mutate shared ONNX memory
+        # Operate on a copy to avoid mutating shared ONNX memory
         samples = samples.copy()
-        fade_samples = int(duration_sec * sample_rate)
+        fade_len = _FADE_SAMPLES
 
-        # If the audio is shorter than 2x fade, just fade the whole thing to center
-        if len(samples) < 2 * fade_samples:
-            fade_samples = len(samples) // 2
+        if n < 2 * fade_len:
+            fade_len = n // 2
 
-        # Apply Fade In
-        if fade_in and fade_samples > 0:
-            fade_in_curve = np.linspace(0.6, 1.0, fade_samples).astype(np.float32)
-            samples[:fade_samples] *= fade_in_curve
+        if fade_in and fade_len > 0:
+            if fade_len == _FADE_SAMPLES:
+                samples[:fade_len] *= _FADE_IN_CURVE
+            else:
+                samples[:fade_len] *= np.linspace(0.6, 1.0, fade_len, dtype=np.float32)
 
-        # Apply Fade Out
-        if fade_out and fade_samples > 0:
-            fade_out_curve = np.linspace(1.0, 0.6, fade_samples).astype(np.float32)
-            samples[-fade_samples:] *= fade_out_curve
+        if fade_out and fade_len > 0:
+            if fade_len == _FADE_SAMPLES:
+                samples[-fade_len:] *= _FADE_OUT_CURVE
+            else:
+                samples[-fade_len:] *= np.linspace(1.0, 0.6, fade_len, dtype=np.float32)
 
         return samples
 
@@ -72,38 +79,12 @@ class AudioService:
     async def stream_samples_to_wav(sample_generator, volume: float):
         """
         Takes an async generator of raw float samples and yields WAV chunks,
-        starting with a minimal header for streaming.
+        starting with a pre-computed header for streaming.
         """
-        # WAV format configuration (Kokoro standard)
-        SAMPLE_RATE = 24000
-        N_CHANNELS = 1
-        SAMP_WIDTH = 2  # 16-bit PCM
+        # 1. Yield pre-computed WAV header immediately (no per-request construction)
+        yield _WAV_HEADER_BYTES
 
-        # 1. Manually construct a 44-byte WAV header for streaming
-        wav_header = bytearray(44)
-        struct.pack_into("<4sI4s", wav_header, 0, b"RIFF", 0, b"WAVE")
-        byte_rate = SAMPLE_RATE * N_CHANNELS * SAMP_WIDTH
-        block_align = N_CHANNELS * SAMP_WIDTH
-        struct.pack_into(
-            "<4sIHHIIHH",
-            wav_header,
-            12,
-            b"fmt ",
-            16,
-            1,
-            N_CHANNELS,
-            SAMPLE_RATE,
-            byte_rate,
-            block_align,
-            SAMP_WIDTH * 8,
-        )
-        struct.pack_into("<4sI", wav_header, 36, b"data", 0)
-
-        yield bytes(wav_header)
-
-        # 2. Stream PCM data chunks - use 'async for'
+        # 2. Stream PCM data chunks
         async for samples in sample_generator:
-            # FIX: Unconditionally clip to prevent integer overflow pops/screeches!
             samples = np.clip(samples * volume, -1.0, 1.0)
-            pcm_data = (samples * 32767).astype(np.int16).tobytes()
-            yield pcm_data
+            yield (samples * 32767).astype(np.int16).tobytes()

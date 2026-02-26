@@ -185,8 +185,9 @@ final class BackendService: NSObject, @unchecked Sendable {
 extension BackendService: URLSessionDataDelegate {
     func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let id = dataTask.taskIdentifier
-        stateQueue.sync {
-            continuations[id]?.yield(data)
+        // Use async dispatch to avoid blocking the URLSession delegate queue
+        stateQueue.async {
+            self.continuations[id]?.yield(data)
         }
     }
 

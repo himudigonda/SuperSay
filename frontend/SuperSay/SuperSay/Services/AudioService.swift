@@ -100,8 +100,8 @@ class AudioService: NSObject, ObservableObject {
                 }
             })
 
-            // Start playback after a tiny safety buffer (250ms = 12000 bytes)
-            if !hasStartedPlayback, lastAudioData.count > 12000 {
+            // Start playback after minimal safety buffer (50ms = 2400 bytes at 24kHz 16-bit mono)
+            if !hasStartedPlayback, lastAudioData.count > 2400 {
                 startPlayback()
             }
         }
@@ -239,10 +239,8 @@ class AudioService: NSObject, ObservableObject {
         guard frameCount > 0, let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { return nil }
         buffer.frameLength = frameCount
         data.withUnsafeBytes { ptr in
-            if let base = ptr.baseAddress?.assumingMemoryBound(to: Int16.self), let channel = buffer.int16ChannelData?[0] {
-                for i in 0 ..< Int(frameCount) {
-                    channel[i] = base[i]
-                }
+            if let base = ptr.baseAddress, let channel = buffer.int16ChannelData?[0] {
+                memcpy(channel, base, Int(frameCount) * MemoryLayout<Int16>.size)
             }
         }
         return buffer
