@@ -30,6 +30,15 @@ class Settings(BaseSettings):
         return os.path.join(self.RESOURCE_PATH, "kokoro-v1.0.onnx")
 
     @property
+    def ACTIVE_MODEL_PATH(self) -> str:
+        """Returns INT8 quantized model if present, else falls back to FP32."""
+        int8_path = self.MODEL_PATH.replace(".onnx", "-int8.onnx")
+        if os.path.exists(int8_path):
+            print(f"[Config] Using INT8 quantized model: {int8_path}")
+            return int8_path
+        return self.MODEL_PATH
+
+    @property
     def VOICES_PATH(self) -> str:
         return os.path.join(self.RESOURCE_PATH, "voices-v1.0.bin")
 
