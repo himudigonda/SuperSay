@@ -21,7 +21,9 @@ async def mock_tts_generator(*args, **kwargs):
 def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "model": "loaded"}
+    body = response.json()
+    assert body["status"] == "ready"
+    assert body["loaded"] is True
 
 
 @patch.object(TTSEngine, "_model", object())

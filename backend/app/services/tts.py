@@ -1,7 +1,9 @@
 import asyncio
 import concurrent.futures
+import gc
 import os
 import re
+import time
 from typing import AsyncGenerator
 
 import numpy as np
@@ -16,6 +18,141 @@ class TTSEngine:
     _model: Kokoro = None
     _executor = None
 
+    # Idle-unload state
+    _is_initializing: bool = False
+    _last_request_time: float = 0.0
+    _IDLE_TIMEOUT: float = 300.0  # seconds of inactivity before unloading (5 min)
+
+    # Lookahead cache: stores pre-computed first-segment audio keyed by
+    # (segment_text, voice, speed).  Populated by prewarm_with_lookahead()
+    # and consumed (popped) by generate() on the first segment.
+    _lookahead_cache: dict = {}
+    _MAX_CACHE_ENTRIES: int = 3
+
+    @classmethod
+    def touch(cls) -> None:
+        """Reset the idle timer. Call at the start of every inference request."""
+        cls._last_request_time = time.monotonic()
+
+    @classmethod
+    def is_loaded(cls) -> bool:
+        return cls._model is not None
+
+    @classmethod
+    async def ensure_loaded(cls) -> None:
+        """Reload the model if it was unloaded by the idle watcher.
+
+        Safe to call concurrently: if two requests arrive simultaneously while
+        cold, only one load will happen (the second waits for _is_initializing).
+        asyncio's cooperative scheduling ensures no await between the flag check
+        and the flag set, so there's no TOCTOU race.
+        """
+        if cls._model is not None:
+            return
+        if cls._is_initializing:
+            # Another coroutine is already loading — wait for it.
+            while cls._is_initializing:
+                await asyncio.sleep(0.05)
+            return
+        # No await between this check and the flag set → atomic in asyncio.
+        cls._is_initializing = True
+        try:
+            print("[TTS] Cold start: reloading model...")
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(None, cls.initialize)
+            print("[TTS] Model reloaded")
+        finally:
+            cls._is_initializing = False
+
+    @classmethod
+    def unload(cls) -> None:
+        """Drop the ONNX session and executor to free ~600 MB of RAM.
+
+        Called by idle_watcher; never called while a request is in-flight
+        because the idle check guards on _last_request_time and asyncio
+        cooperative scheduling prevents interleaving with active generate() calls.
+        """
+        if cls._model is None:
+            return
+        idle = time.monotonic() - cls._last_request_time
+        print(f"[TTS] Idle for {idle:.0f}s — unloading model to free RAM")
+        cls._model = None
+        if cls._executor is not None:
+            cls._executor.shutdown(wait=False)
+            cls._executor = None
+        cls._lookahead_cache.clear()
+        gc.collect()
+        print("[TTS] Model unloaded")
+
+    @classmethod
+    async def idle_watcher(cls) -> None:
+        """Background asyncio task: unload model after IDLE_TIMEOUT of inactivity.
+
+        Checks every 60 s. Skips unload if:
+        - model is already unloaded
+        - another coroutine is currently loading it
+        - last request was within IDLE_TIMEOUT
+        """
+        while True:
+            await asyncio.sleep(60)
+            if cls._model is None or cls._is_initializing:
+                continue
+            if cls._last_request_time == 0:
+                continue
+            if time.monotonic() - cls._last_request_time > cls._IDLE_TIMEOUT:
+                cls.unload()
+
+    @classmethod
+    async def prewarm_with_lookahead(cls, text: str, voice: str, speed: float) -> None:
+        """Pre-run inference on the first segment and store the result in the cache.
+
+        Called by /prewarm when the client sends clipboard text + voice + speed.
+        The next /speak with the same first segment + settings will pop the cached
+        audio and stream it immediately (cache-hit path: <20ms TTFA).
+
+        Safe to call even when another request is in-flight — it queues behind
+        the single-threaded executor so espeak-ng never runs concurrently.
+        """
+        if not cls._model or not cls._executor:
+            return
+
+        segments = cls._split_segments(text)
+        if not segments:
+            return
+
+        first_seg = segments[0].strip()
+        key = (first_seg, voice, round(speed, 2))
+
+        if key in cls._lookahead_cache:
+            print(f"[TTS] Lookahead: already cached '{first_seg[:30]}'")
+            return
+
+        print(f"[TTS] Lookahead: pre-computing '{first_seg[:30]}'...")
+        loop = asyncio.get_running_loop()
+        try:
+            audio, _ = await loop.run_in_executor(
+                cls._executor,
+                cls._model.create,
+                first_seg,
+                voice,
+                speed,
+                "en-us",
+            )
+        except Exception as e:
+            print(f"[TTS] Lookahead Error: {e}")
+            return
+
+        if audio is None:
+            return
+
+        # Evict oldest entry when at capacity (FIFO)
+        if len(cls._lookahead_cache) >= cls._MAX_CACHE_ENTRIES:
+            oldest_key = next(iter(cls._lookahead_cache))
+            cls._lookahead_cache.pop(oldest_key)
+
+        cls._lookahead_cache[key] = audio
+        print(f"[TTS] Lookahead: cached '{first_seg[:30]}'")
+
     @classmethod
     def initialize(cls):
         """Loads the ONNX model with optimized session and warms up inference."""
@@ -28,7 +165,8 @@ class TTSEngine:
 
         # 2. Initialize the Model with optimized ONNX session
         if cls._model is None:
-            print(f"[TTS] Loading model from: {settings.MODEL_PATH}")
+            active_model_path = settings.ACTIVE_MODEL_PATH
+            print(f"[TTS] Loading model from: {active_model_path}")
             try:
                 sess_options = ort.SessionOptions()
                 sess_options.enable_mem_pattern = True
@@ -48,7 +186,7 @@ class TTSEngine:
                 # CPU-only: CoreML partitions only 43% of Kokoro's nodes, and the
                 # data transfer overhead between CoreML and CPU makes it slower overall
                 session = ort.InferenceSession(
-                    settings.MODEL_PATH,
+                    active_model_path,
                     sess_options,
                     providers=["CPUExecutionProvider"],
                 )
@@ -63,6 +201,9 @@ class TTSEngine:
             except Exception as e:
                 print(f"[TTS] Fatal Error: {e}")
                 raise e
+
+        # Mark load time so idle_watcher doesn't immediately unload on reload.
+        cls.touch()
 
     # Maximum words for the first segment (keeps TTFA low).
     # Profiling: 2 words ≈ 312ms, 3 words ≈ 358ms, 4 words ≈ 374ms
@@ -145,18 +286,31 @@ class TTSEngine:
         loop = asyncio.get_running_loop()
 
         for i, seg_text in enumerate(segments):
-            try:
-                audio, _ = await loop.run_in_executor(
-                    cls._executor,
-                    cls._model.create,
-                    seg_text.strip(),
-                    voice,
-                    speed,
-                    "en-us",
-                )
-            except Exception as e:
-                print(f"[TTS] Model Error on '{seg_text[:30]}': {e}")
-                continue
+            cls.touch()  # Keep idle timer alive throughout multi-segment generation
+            seg_stripped = seg_text.strip()
+            audio = None
+
+            # Cache hit: first segment was pre-computed by prewarm_with_lookahead()
+            if i == 0:
+                key = (seg_stripped, voice, round(speed, 2))
+                cached = cls._lookahead_cache.pop(key, None)
+                if cached is not None:
+                    print(f"[TTS] Cache hit: streaming '{seg_stripped[:30]}'")
+                    audio = cached
+
+            if audio is None:
+                try:
+                    audio, _ = await loop.run_in_executor(
+                        cls._executor,
+                        cls._model.create,
+                        seg_stripped,
+                        voice,
+                        speed,
+                        "en-us",
+                    )
+                except Exception as e:
+                    print(f"[TTS] Model Error on '{seg_text[:30]}': {e}")
+                    continue
 
             if audio is None:
                 continue
