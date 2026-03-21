@@ -11,8 +11,9 @@ from kokoro_onnx import Kokoro
 
 def profile_inference():
     """Profile a single ONNX inference call in isolation."""
-    print("Loading model...")
-    model = Kokoro(settings.MODEL_PATH, settings.VOICES_PATH)
+    model_path = settings.ACTIVE_MODEL_PATH
+    print(f"Loading model: {model_path}")
+    model = Kokoro(model_path, settings.VOICES_PATH)
 
     # Warmup
     for _ in range(3):
