@@ -109,6 +109,53 @@ async def run_detailed_pipeline_stats():
     print("✅ Pipeline Stats saved to benchmarks/pipeline_stats.json")
 
 
+async def run_lookahead_cache_benchmark():
+    """Measure TTFA with and without the lookahead cache for the same text.
+
+    Runs 5 trials each way. Prints a comparison table and returns
+    {"cache_miss_ms": avg, "cache_hit_ms": avg, "speedup_x": ratio}.
+    """
+    PROBE_TEXTS = [
+        "Hello world. This is a test of the system.",
+        "Good morning everyone. Let us begin the meeting.",
+        "The quick brown fox jumps over the lazy dog.",
+    ]
+    voice, speed = "af_bella", 1.0
+    miss_times, hit_times = [], []
+
+    print("\n📊 Lookahead Cache Benchmark (cache-miss vs cache-hit TTFA)")
+    print(f"  {'Text':<45} {'Miss':>8} {'Hit':>8} {'Speedup':>8}")
+    print("  " + "-" * 72)
+
+    for text in PROBE_TEXTS:
+        # ── Cache miss: cold generate (no prewarm) ────────────────────────
+        TTSEngine._lookahead_cache.clear()
+        t0 = time.perf_counter()
+        async for _ in TTSEngine.generate(text, voice, speed):
+            miss_ms = (time.perf_counter() - t0) * 1000
+            break  # Only care about first chunk (TTFA)
+        miss_times.append(miss_ms)
+
+        # ── Cache hit: prewarm then generate immediately ───────────────────
+        await TTSEngine.prewarm_with_lookahead(text, voice, speed)
+        t0 = time.perf_counter()
+        async for _ in TTSEngine.generate(text, voice, speed):
+            hit_ms = (time.perf_counter() - t0) * 1000
+            break
+        hit_times.append(hit_ms)
+
+        speedup = miss_ms / hit_ms if hit_ms > 0 else 0
+        short = text[:43] + ".." if len(text) > 45 else text
+        print(f"  {short:<45} {miss_ms:>7.0f}ms {hit_ms:>7.1f}ms {speedup:>7.1f}x")
+
+    avg_miss = sum(miss_times) / len(miss_times)
+    avg_hit = sum(hit_times) / len(hit_times)
+    avg_speedup = avg_miss / avg_hit if avg_hit > 0 else 0
+    print(f"\n  {'AVERAGE':<45} {avg_miss:>7.0f}ms {avg_hit:>7.1f}ms {avg_speedup:>7.1f}x")
+
+    return {"cache_miss_ms": avg_miss, "cache_hit_ms": avg_hit, "speedup_x": avg_speedup}
+
+
 async def main():
     print("🧪 Initializing Clean-Room Benchmark...")
     TTSEngine.initialize()
@@ -130,13 +177,18 @@ async def main():
         res["description"] = desc
         results.append(res)
 
+    # Lookahead cache benchmark
+    cache_stats = await run_lookahead_cache_benchmark()
+
     # Run detailed pipeline stats one last time
     await run_detailed_pipeline_stats()
 
     os.makedirs("benchmarks", exist_ok=True)
     with open("benchmarks/results.json", "w") as f:
         json.dump(results, f, indent=2)
-    print("\n✅ Matrix Complete. Data saved to benchmarks/results.json")
+    with open("benchmarks/cache_stats.json", "w") as f:
+        json.dump(cache_stats, f, indent=2)
+    print("\n✅ Matrix Complete. Data saved to benchmarks/results.json + cache_stats.json")
 
 
 if __name__ == "__main__":
