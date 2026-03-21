@@ -205,6 +205,11 @@ class AudioService: NSObject, ObservableObject {
     func prepareForStream() {
         stop()
         isStreamActive = true
+        // Pre-warm hardware: start playerNode now so it's running when first buffer arrives.
+        // stop() reset hasStartedPlayback = false; calling play() here re-arms it.
+        if !engine.isRunning { try? engine.start() }
+        playerNode.play()
+        hasStartedPlayback = true
     }
 
     func finishStream() {
