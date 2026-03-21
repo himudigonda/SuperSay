@@ -1,3 +1,4 @@
+import asyncio
 import os
 
 import uvicorn
@@ -14,8 +15,9 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup
+    # Startup: load model, then launch background idle watcher.
     TTSEngine.initialize()
+    asyncio.create_task(TTSEngine.idle_watcher())
     yield
     # Shutdown (if needed)
 

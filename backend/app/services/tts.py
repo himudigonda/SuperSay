@@ -315,14 +315,10 @@ class TTSEngine:
             if audio is None:
                 continue
 
-            is_first = i == 0
-
-            # Apply fades: skip fade-in on first segment to preserve attack
-            audio = AudioService.apply_fade(audio, fade_in=not is_first, fade_out=True)
-
             # Append inter-segment silence using pre-computed arrays
+            # Speed-scaled pause: divide duration by speed so pauses feel proportional
             last_char = seg_text.strip()[-1] if seg_text.strip() else ""
-            silence_sec = pause_map.get(last_char, 0.1)
+            silence_sec = pause_map.get(last_char, 0.1) / speed
             silence = AudioService.get_silence(silence_sec)
 
             yield np.concatenate([audio, silence])

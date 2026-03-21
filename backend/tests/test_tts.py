@@ -79,8 +79,8 @@ async def test_tts_engine_newlines():
 
 
 @pytest.mark.asyncio
-async def test_tts_engine_fade_logic():
-    # Verify that the first segment has fade_in=False and subsequent have fade_in=True
+async def test_tts_engine_no_inter_segment_fades():
+    # Verify that inter-segment fades are NOT applied (removed to prevent volume dips)
     with patch.object(TTSEngine, "_model", MockKokoro()):
         # "Good morning. How are you today?" → 2 segments:
         # "Good morning." (2 words, ≤ _FIRST_SEG_WORDS) and "How are you today?" (4 words)
@@ -97,16 +97,8 @@ async def test_tts_engine_fade_logic():
             async for _ in gen:
                 pass
 
-            assert mock_fade.call_count == 2
-            # First call should have fade_in=False
-            first_call_args = mock_fade.call_args_list[0]
-            assert first_call_args.kwargs["fade_in"] is False
-            assert first_call_args.kwargs["fade_out"] is True
-
-            # Second call should have fade_in=True
-            second_call_args = mock_fade.call_args_list[1]
-            assert second_call_args.kwargs["fade_in"] is True
-            assert second_call_args.kwargs["fade_out"] is True
+            # apply_fade should NOT be called from generate() anymore
+            assert mock_fade.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -199,3 +191,44 @@ async def test_lookahead_cache_evicts_oldest_when_full():
     # Oldest must be gone; total entries stay at MAX_CACHE_ENTRIES
     assert oldest_key not in TTSEngine._lookahead_cache
     assert len(TTSEngine._lookahead_cache) == TTSEngine._MAX_CACHE_ENTRIES
+
+
+@pytest.mark.asyncio
+async def test_speed_scaled_pauses():
+    """Verify that pause durations scale inversely with speed (faster = shorter pauses)."""
+    mock_model = MagicMock()
+    # Return dummy audio: 1 second of samples at 24kHz
+    mock_model.create.return_value = (np.ones(24000, dtype=np.float32), None)
+    TTSEngine._model = mock_model
+
+    # Test text with punctuation to trigger pauses
+    text = "Hello world. This is great!"
+
+    # Generate at 1.0x speed
+    gen_1x = TTSEngine.generate(text, "af_bella", 1.0)
+    chunks_1x = []
+    async for chunk in gen_1x:
+        chunks_1x.append(chunk)
+    total_samples_1x = sum(len(chunk) for chunk in chunks_1x)
+
+    # Generate at 2.0x speed (should have shorter pauses)
+    mock_model.reset_mock()
+    gen_2x = TTSEngine.generate(text, "af_bella", 2.0)
+    chunks_2x = []
+    async for chunk in gen_2x:
+        chunks_2x.append(chunk)
+    total_samples_2x = sum(len(chunk) for chunk in chunks_2x)
+
+    # At 2.0x speed with speed-scaled pauses, total duration should be shorter
+    # (speech is same length since speed only affects pause duration, not phoneme timing)
+    # Actually, speed parameter affects the model.create output, so audio length differs.
+    # The key validation: silence between "Hello world." and "This is great!" should be
+    # half as long at 2.0x speed as at 1.0x speed.
+
+    # Base pause for "." is 0.35s. At 24kHz:
+    # 1.0x: 0.35 / 1.0 = 0.35s = 8400 samples
+    # 2.0x: 0.35 / 2.0 = 0.175s = 4200 samples
+    # Difference should be ~4200 samples (one pause worth)
+
+    # We expect fewer samples at 2.0x due to faster playback + shorter pauses
+    assert total_samples_2x < total_samples_1x

@@ -151,9 +151,15 @@ async def run_lookahead_cache_benchmark():
     avg_miss = sum(miss_times) / len(miss_times)
     avg_hit = sum(hit_times) / len(hit_times)
     avg_speedup = avg_miss / avg_hit if avg_hit > 0 else 0
-    print(f"\n  {'AVERAGE':<45} {avg_miss:>7.0f}ms {avg_hit:>7.1f}ms {avg_speedup:>7.1f}x")
+    print(
+        f"\n  {'AVERAGE':<45} {avg_miss:>7.0f}ms {avg_hit:>7.1f}ms {avg_speedup:>7.1f}x"
+    )
 
-    return {"cache_miss_ms": avg_miss, "cache_hit_ms": avg_hit, "speedup_x": avg_speedup}
+    return {
+        "cache_miss_ms": avg_miss,
+        "cache_hit_ms": avg_hit,
+        "speedup_x": avg_speedup,
+    }
 
 
 async def main():
@@ -188,7 +194,9 @@ async def main():
         json.dump(results, f, indent=2)
     with open("benchmarks/cache_stats.json", "w") as f:
         json.dump(cache_stats, f, indent=2)
-    print("\n✅ Matrix Complete. Data saved to benchmarks/results.json + cache_stats.json")
+    print(
+        "\n✅ Matrix Complete. Data saved to benchmarks/results.json + cache_stats.json"
+    )
 
 
 if __name__ == "__main__":
