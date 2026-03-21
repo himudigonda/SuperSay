@@ -132,20 +132,42 @@ final class BackendService: NSObject, @unchecked Sendable {
         NSWorkspace.shared.activateFileViewerSelecting([desktop])
     }
 
-    func checkHealth() async -> Bool {
-        let healthURL = baseURL.appendingPathComponent("health")
-        var request = URLRequest(url: healthURL)
+    struct HealthStatus {
+        let isOnline: Bool
+        let isModelLoaded: Bool
+
+        static let offline = HealthStatus(isOnline: false, isModelLoaded: false)
+    }
+
+    func checkHealth() async -> HealthStatus {
+        var request = URLRequest(url: baseURL.appendingPathComponent("health"))
         request.timeoutInterval = 3
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            let online = (response as? HTTPURLResponse)?.statusCode == 200
-            if online {
-                stateQueue.sync { _isLaunching = false }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                return .offline
             }
-            return online
+            stateQueue.sync { _isLaunching = false }
+            let loaded = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["loaded"] as? Bool ?? false
+            return HealthStatus(isOnline: true, isModelLoaded: loaded)
         } catch {
-            return false
+            return .offline
         }
+    }
+
+    /// Fire-and-forget: ask the backend to reload the model and optionally pre-compute
+    /// the first audio segment for the given text (lookahead cache).
+    /// Returns immediately. Safe to call when model is already loaded.
+    func prewarm(text: String? = nil, voice: String? = nil, speed: Double? = nil) async {
+        var request = URLRequest(url: baseURL.appendingPathComponent("prewarm"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 2
+        if let text, let voice, let speed {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let payload: [String: Any] = ["text": text, "voice": voice, "speed": speed]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        }
+        try? await URLSession.shared.data(for: request)
     }
 
     func streamAudio(text: String, voice: String, speed: Double, volume: Double) -> AsyncStream<Data> {

@@ -164,7 +164,14 @@ struct SuperSayApp: App {
                 NSApplication.shared.terminate(nil)
             }
         } label: {
-            Image("MenuBarIcon")
+            switch dashboardVM.status {
+            case .thinking:
+                Label("Processing", systemImage: "waveform.circle")
+            case .speaking:
+                Label("Speaking", systemImage: "waveform.circle.fill")
+            default:
+                Image("MenuBarIcon")
+            }
         }
     }
 }

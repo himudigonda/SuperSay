@@ -13,7 +13,11 @@ class DashboardViewModel: ObservableObject {
     @Published var status: AppStatus = .ready
     @Published var isBackendOnline = false
     @Published var isBackendInitializing = true // Start as initializing
+    @Published var isModelLoaded = false        // Model in ONNX session RAM
     @Published var selectedTab: String? = "home"
+
+    // Clipboard monitoring for anticipatory pre-warm
+    private var lastPasteboardChangeCount = NSPasteboard.general.changeCount
 
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
     @AppStorage("speechSpeed") var speechSpeed = 1.0
@@ -70,6 +74,7 @@ class DashboardViewModel: ObservableObject {
 
         setupBindings()
         startHeartbeat()
+        startPrewarmObservers()
     }
 
     private func setupBindings() {
@@ -195,28 +200,58 @@ class DashboardViewModel: ObservableObject {
     func startHeartbeat() {
         Task {
             while true {
-                isBackendOnline = await backend.checkHealth()
+                let health = await backend.checkHealth()
+                isBackendOnline = health.isOnline
+                isModelLoaded = health.isModelLoaded
 
-                DispatchQueue.main.async {
-                    if self.isBackendOnline {
-                        self.isBackendInitializing = false
-                    } else {
-                        // If we are offline, we are likely initializing or failed
-                        // We let BackendService's isLaunching state dictate this implicitly,
-                        // but for now, if offline, we assume initializing loop
-                        Task {
-                            let launching = self.backend.isLaunching
-                            DispatchQueue.main.async {
-                                self.isBackendInitializing = launching
-                            }
-                        }
-                    }
+                if health.isOnline {
+                    isBackendInitializing = false
+                } else {
+                    let launching = backend.isLaunching
+                    isBackendInitializing = launching
+                    await backend.start()
                 }
 
-                if !isBackendOnline { await backend.start() }
-                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
+                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
             }
         }
+    }
+
+    /// Pre-warm the model before the user speaks, hiding the ~1.3 s cold-reload cost.
+    ///
+    /// Two signals trigger this:
+    /// 1. The clipboard changes — user just copied text and will likely press the hotkey.
+    /// 2. The app becomes active — user switched to SuperSay to type/speak directly.
+    ///
+    /// In both cases the backend starts loading the ONNX model in the background.
+    /// By the time the user actually presses the hotkey (typically 0.5–3 s later),
+    /// the model is already warm and /speak returns audio with normal ~300 ms latency.
+    private func startPrewarmObservers() {
+        // Signal 1: clipboard change — always prewarm (model load + lookahead cache).
+        // No !isModelLoaded guard: even when warm, we want to pre-compute the first
+        // audio segment so /speak finds it cached and streams it in <20ms.
+        Timer.publish(every: 1.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let current = NSPasteboard.general.changeCount
+                guard current != self.lastPasteboardChangeCount else { return }
+                self.lastPasteboardChangeCount = current
+                guard self.isBackendOnline else { return }
+                let text = NSPasteboard.general.string(forType: .string) ?? ""
+                let voice = self.selectedVoice
+                let speed = self.speechSpeed
+                Task { await self.backend.prewarm(text: text, voice: voice, speed: speed) }
+            }
+            .store(in: &cancellables)
+
+        // Signal 2: app focus — only loads the model (no lookahead; unknown text).
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                guard let self, self.isBackendOnline, !self.isModelLoaded else { return }
+                Task { await self.backend.prewarm() }
+            }
+            .store(in: &cancellables)
     }
 
     /// --- FONT PANEL SUPPORT ---
