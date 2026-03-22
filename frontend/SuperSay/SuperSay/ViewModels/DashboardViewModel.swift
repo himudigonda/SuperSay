@@ -20,6 +20,12 @@ class DashboardViewModel: ObservableObject {
     private var lastPasteboardChangeCount = NSPasteboard.general.changeCount
 
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
+    @AppStorage("ttsEngine") var ttsEngine = "kokoro" {
+        didSet { onEngineChanged() }
+    }
+    @AppStorage("kittenModel") var kittenModel = "nano" {
+        didSet { onEngineChanged() }
+    }
     @AppStorage("speechSpeed") var speechSpeed = 1.0
     @AppStorage("speechVolume") var speechVolume = 1.0
     @AppStorage("enableDucking") var enableDucking = true
@@ -50,6 +56,34 @@ class DashboardViewModel: ObservableObject {
         default:
             .custom(selectedFontName, size: size).weight(weight)
         }
+    }
+
+    private static let kokoroVoices: [(id: String, display: String)] = [
+        ("af_bella", "🇺🇸 Bella"), ("af_sarah", "🇺🇸 Sarah"),
+        ("am_adam", "🇺🇸 Adam"), ("am_michael", "🇺🇸 Michael"),
+        ("bf_emma", "🇬🇧 Emma"), ("bf_isabella", "🇬🇧 Isabella"),
+        ("bm_george", "🇬🇧 George"), ("bm_lewis", "🇬🇧 Lewis"),
+    ]
+
+    private static let kittenVoices: [(id: String, display: String)] = [
+        ("Bella", "Bella"), ("Jasper", "Jasper"), ("Luna", "Luna"), ("Bruno", "Bruno"),
+        ("Rosie", "Rosie"), ("Hugo", "Hugo"), ("Kiki", "Kiki"), ("Leo", "Leo"),
+    ]
+
+    var availableVoices: [(id: String, display: String)] {
+        ttsEngine == "kitten" ? Self.kittenVoices : Self.kokoroVoices
+    }
+
+    private func onEngineChanged() {
+        guard isBackendOnline else { return }
+        // Reset voice if current selection isn't valid for the new engine
+        let validIDs = availableVoices.map(\.id)
+        if !validIDs.contains(selectedVoice) {
+            selectedVoice = ttsEngine == "kitten" ? "Bella" : "af_bella"
+        }
+        let engine = ttsEngine
+        let model: String? = engine == "kitten" ? kittenModel : nil
+        Task { try? await backend.switchEngine(engine: engine, model: model) }
     }
 
     /// Computed property for display

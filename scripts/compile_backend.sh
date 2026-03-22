@@ -17,23 +17,42 @@ ESPEAK_PATH=$($PYTHON_EXEC -c "import os, espeakng_loader; print(os.path.dirname
 KOKORO_CONFIG=$($PYTHON_EXEC -c "import os, kokoro_onnx; print(os.path.join(os.path.dirname(kokoro_onnx.__file__), 'config.json'))")
 
 echo "📍 Config located at: $KOKORO_CONFIG"
+echo "📍 Espeak located at: $ESPEAK_PATH"
 
 # 3. COMPILE
-# We remove hidden-import kokoro_onnx to let PyInstaller find it naturally first,
-# then we surgically repair the missing config.
-$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name "SuperSayServer" \
+# Build command with all kitten variants (nano required, micro/mini optional)
+CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name 'SuperSayServer' \
     --paths . \
-    --add-data "kokoro-v1.0.onnx:." \
-    --add-data "voices-v1.0.bin:." \
-    --add-data "$ESPEAK_PATH:espeakng_loader" \
-    --collect-all "phonemizer" \
-    --collect-all "language_tags" \
-    --collect-all "kokoro_onnx" \
-    --hidden-import "uvicorn.loops.asyncio" \
-    --hidden-import "uvicorn.protocols.http.h11_impl" \
-    --hidden-import "fastapi" \
-    --hidden-import "starlette" \
-    app/main.py
+    --add-data 'kokoro-v1.0.onnx:.' \
+    --add-data 'voices-v1.0.bin:.' \
+    --add-data 'kitten-nano.onnx:.' \
+    --add-data 'kitten-nano-voices.npz:.' \
+    --add-data 'kitten-nano-config.json:.' \
+    --add-data '$ESPEAK_PATH:espeakng_loader' \
+    --collect-all 'phonemizer' \
+    --collect-all 'language_tags' \
+    --collect-all 'kokoro_onnx' \
+    --collect-all 'kittentts' \
+    --collect-all 'misaki' \
+    --hidden-import 'uvicorn.loops.asyncio' \
+    --hidden-import 'uvicorn.protocols.http.h11_impl' \
+    --hidden-import 'fastapi' \
+    --hidden-import 'starlette'"
+
+# Add optional micro variant files (skip if not downloaded)
+if [ -f kitten-micro.onnx ]; then
+    CMD="$CMD --add-data 'kitten-micro.onnx:.' --add-data 'kitten-micro-voices.npz:.' --add-data 'kitten-micro-config.json:.'"
+fi
+
+# Add optional mini variant files (skip if not downloaded)
+if [ -f kitten-mini.onnx ]; then
+    CMD="$CMD --add-data 'kitten-mini.onnx:.' --add-data 'kitten-mini-voices.npz:.' --add-data 'kitten-mini-config.json:.'"
+fi
+
+CMD="$CMD app/main.py"
+
+# Execute the build command
+eval "$CMD"
 
 # 4. SURGICAL INJECTION (Double Check)
 # Even with collect-all, we force copy config.json if it's missing to be 100% sure.

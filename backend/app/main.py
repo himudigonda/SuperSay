@@ -4,6 +4,7 @@ import os
 import uvicorn
 from app.api.endpoints import router
 from app.core.config import settings
+from app.services.engine_manager import EngineManager
 from app.services.tts import TTSEngine
 from fastapi import FastAPI
 
@@ -15,9 +16,12 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: load model, then launch background idle watcher.
-    TTSEngine.initialize()
+    # Startup: initialize default engine (Kokoro), launch idle watchers.
+    EngineManager.initialize()
     asyncio.create_task(TTSEngine.idle_watcher())
+    from app.services.kitten_engine import KittenEngine
+
+    asyncio.create_task(KittenEngine.idle_watcher())
     yield
     # Shutdown (if needed)
 

@@ -170,6 +170,24 @@ final class BackendService: NSObject, @unchecked Sendable {
         try? await URLSession.shared.data(for: request)
     }
 
+    struct EngineInfo: Decodable {
+        let engine: String
+        let model: String
+        let voices: [String]
+    }
+
+    func switchEngine(engine: String, model: String?) async throws -> EngineInfo {
+        var request = URLRequest(url: baseURL.appendingPathComponent("engine"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+        var payload: [String: Any] = ["engine": engine]
+        if let model { payload["model"] = model }
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(EngineInfo.self, from: data)
+    }
+
     func streamAudio(text: String, voice: String, speed: Double, volume: Double) -> AsyncStream<Data> {
         AsyncStream { continuation in
             let url = baseURL.appendingPathComponent("speak")

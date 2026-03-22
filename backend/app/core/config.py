@@ -42,5 +42,17 @@ class Settings(BaseSettings):
     def VOICES_PATH(self) -> str:
         return os.path.join(self.RESOURCE_PATH, "voices-v1.0.bin")
 
+    def kitten_model_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS model ONNX file for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}.onnx")
+
+    def kitten_voices_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS voices file for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}-voices.npz")
+
+    def kitten_config_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS config JSON for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}-config.json")
+
 
 settings = Settings()
