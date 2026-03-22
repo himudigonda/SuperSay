@@ -27,12 +27,14 @@ def reset_kitten_engine():
     KittenEngine._active_variant = "nano"
     KittenEngine._is_initializing = False
     KittenEngine._last_request_time = 0.0
+    KittenEngine._lookahead_cache.clear()
     yield
     if KittenEngine._executor:
         KittenEngine._executor.shutdown(wait=False)
         KittenEngine._executor = None
     KittenEngine._model = None
     KittenEngine._active_variant = "nano"
+    KittenEngine._lookahead_cache.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -343,3 +345,111 @@ async def test_kitten_variant_mismatch_during_init_retries():
     # and _is_initializing should be reset for subsequent requests
     assert not KittenEngine._is_initializing
     assert KittenEngine._active_variant in ("nano", "micro")
+
+
+# --- Kitten lookahead cache ---
+
+
+@pytest.mark.asyncio
+async def test_kitten_prewarm_populates_cache():
+    """prewarm_with_lookahead() stores audio in _lookahead_cache."""
+    KittenEngine._model = MockKittenTTS_1_Onnx()
+
+    await KittenEngine.prewarm_with_lookahead("Hello world.", "Bella", 1.0)
+
+    # "Hello world." ends with "." → single segment
+    first_seg = _split_segments("Hello world.")[0].strip()
+    key = (first_seg, "Bella", 1.0)
+    assert key in KittenEngine._lookahead_cache
+    assert isinstance(KittenEngine._lookahead_cache[key], np.ndarray)
+    assert KittenEngine._lookahead_cache[key].ndim == 1
+
+
+@pytest.mark.asyncio
+async def test_kitten_prewarm_no_op_when_already_cached():
+    """prewarm_with_lookahead() skips inference when key already cached."""
+    KittenEngine._model = MockKittenTTS_1_Onnx()
+    mock = MagicMock(wraps=KittenEngine._model)
+    KittenEngine._model = mock
+
+    text = "Hello world."
+    first_seg = _split_segments(text)[0].strip()
+    key = (first_seg, "Bella", 1.0)
+    KittenEngine._lookahead_cache[key] = np.zeros(100, dtype=np.float32)
+
+    await KittenEngine.prewarm_with_lookahead(text, "Bella", 1.0)
+
+    mock.generate.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_kitten_prewarm_no_op_when_model_not_loaded():
+    """prewarm_with_lookahead() is a no-op when model is not loaded."""
+    KittenEngine._model = None
+    # Should not raise
+    await KittenEngine.prewarm_with_lookahead("Hello world.", "Bella", 1.0)
+    assert len(KittenEngine._lookahead_cache) == 0
+
+
+@pytest.mark.asyncio
+async def test_kitten_cache_hit_skips_inference():
+    """generate() serves first segment from cache without calling model.generate."""
+    mock_model = MagicMock()
+    mock_model.generate.return_value = np.ones((1, 24000), dtype=np.float32)
+    KittenEngine._model = mock_model
+
+    text = "Hello world. Great to meet you."
+    first_seg = _split_segments(text)[0].strip()
+    key = (first_seg, "Bella", round(1.0, 2))
+    cached_audio = np.ones(500, dtype=np.float32) * 0.5
+    KittenEngine._lookahead_cache[key] = cached_audio
+
+    chunks = []
+    async for chunk in KittenEngine.generate(text, "Bella", 1.0):
+        chunks.append(chunk)
+
+    # model.generate must NOT have been called for the first (cached) segment
+    called_texts = [c[0][0] for c in mock_model.generate.call_args_list]
+    assert first_seg not in called_texts, "model.generate was called for cached segment"
+    # Cache entry must be consumed (popped)
+    assert key not in KittenEngine._lookahead_cache
+
+
+@pytest.mark.asyncio
+async def test_kitten_cache_evicts_oldest_when_full():
+    """When cache is full, oldest entry is evicted before adding a new one."""
+    KittenEngine._model = MockKittenTTS_1_Onnx()
+
+    for i in range(KittenEngine._MAX_CACHE_ENTRIES):
+        KittenEngine._lookahead_cache[(f"seg{i}", "Bella", 1.0)] = np.zeros(10)
+
+    oldest_key = ("seg0", "Bella", 1.0)
+    assert oldest_key in KittenEngine._lookahead_cache
+
+    await KittenEngine.prewarm_with_lookahead("New sentence here today.", "Bella", 1.0)
+
+    assert oldest_key not in KittenEngine._lookahead_cache
+    assert len(KittenEngine._lookahead_cache) == KittenEngine._MAX_CACHE_ENTRIES
+
+
+@pytest.mark.asyncio
+async def test_kitten_unload_clears_cache():
+    """unload() also clears the lookahead cache."""
+    KittenEngine._model = MockKittenTTS_1_Onnx()
+    KittenEngine._lookahead_cache[("seg", "Bella", 1.0)] = np.zeros(10)
+    KittenEngine._last_request_time = 1.0  # non-zero so unload proceeds
+
+    KittenEngine.unload()
+
+    assert len(KittenEngine._lookahead_cache) == 0
+
+
+@pytest.mark.asyncio
+async def test_engine_manager_prewarm_forwards_to_kitten():
+    """EngineManager.prewarm_with_lookahead() delegates to KittenEngine when active."""
+    EngineManager.active = "kitten"
+
+    with patch.object(KittenEngine, "prewarm_with_lookahead") as mock_prewarm:
+        await EngineManager.prewarm_with_lookahead("Hello world.", "Bella", 1.0)
+
+    mock_prewarm.assert_called_once_with("Hello world.", "Bella", 1.0)

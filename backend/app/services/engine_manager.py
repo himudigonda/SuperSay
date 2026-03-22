@@ -100,7 +100,8 @@ class EngineManager:
     async def prewarm_with_lookahead(cls, text: str, voice: str, speed: float) -> None:
         if cls.active == "kokoro":
             await TTSEngine.prewarm_with_lookahead(text, voice, speed)
-        # KittenEngine does not implement lookahead cache (can be added later)
+        else:
+            await KittenEngine.prewarm_with_lookahead(text, voice, speed)
 
     @classmethod
     def is_loaded(cls) -> bool:

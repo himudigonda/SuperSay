@@ -65,6 +65,11 @@ class KittenEngine:
     _last_request_time: float = 0.0
     _IDLE_TIMEOUT: float = 300.0
 
+    # Lookahead cache: same pattern as TTSEngine. Populated by prewarm_with_lookahead(),
+    # consumed (popped) by generate() on the first segment.
+    _lookahead_cache: dict = {}
+    _MAX_CACHE_ENTRIES: int = 3
+
     @classmethod
     def touch(cls) -> None:
         cls._last_request_time = time.monotonic()
@@ -104,8 +109,57 @@ class KittenEngine:
         if cls._executor is not None:
             cls._executor.shutdown(wait=False)
             cls._executor = None
+        cls._lookahead_cache.clear()
         gc.collect()
         print("[Kitten] Model unloaded")
+
+    @classmethod
+    async def prewarm_with_lookahead(cls, text: str, voice: str, speed: float) -> None:
+        """Pre-run inference on the first segment and cache the audio.
+
+        Mirrors TTSEngine.prewarm_with_lookahead(). Called by /prewarm when the
+        client sends clipboard text + voice + speed. The next /speak with the
+        same first segment + settings pops the cached audio, giving <20ms TTFA.
+        """
+        if not cls._model or not cls._executor:
+            return
+
+        segments = _split_segments(text)
+        if not segments:
+            return
+
+        first_seg = segments[0].strip()
+        key = (first_seg, voice, round(speed, 2))
+
+        if key in cls._lookahead_cache:
+            print(f"[Kitten] Lookahead: already cached '{first_seg[:30]}'")
+            return
+
+        print(f"[Kitten] Lookahead: pre-computing '{first_seg[:30]}'...")
+        loop = asyncio.get_running_loop()
+        try:
+            audio = await loop.run_in_executor(
+                cls._executor,
+                lambda s=first_seg: cls._model.generate(
+                    s, voice=voice, speed=speed, clean_text=False
+                ),
+            )
+        except Exception as e:
+            print(f"[Kitten] Lookahead Error: {e}")
+            return
+
+        if audio is None:
+            return
+
+        audio = np.asarray(audio).squeeze()
+
+        # Evict oldest entry when at capacity (FIFO)
+        if len(cls._lookahead_cache) >= cls._MAX_CACHE_ENTRIES:
+            oldest_key = next(iter(cls._lookahead_cache))
+            cls._lookahead_cache.pop(oldest_key)
+
+        cls._lookahead_cache[key] = audio
+        print(f"[Kitten] Lookahead: cached '{first_seg[:30]}'")
 
     @classmethod
     async def idle_watcher(cls) -> None:
@@ -170,26 +224,36 @@ class KittenEngine:
 
         loop = asyncio.get_running_loop()
 
-        for seg_text in segments:
+        for i, seg_text in enumerate(segments):
             cls.touch()
             seg_stripped = seg_text.strip()
+            audio = None
 
-            try:
-                audio = await loop.run_in_executor(
-                    cls._executor,
-                    lambda s=seg_stripped: cls._model.generate(
-                        s, voice=voice, speed=speed, clean_text=False
-                    ),
-                )
-            except Exception as e:
-                print(f"[Kitten] Model Error on '{seg_text[:30]}': {e}")
-                continue
+            # Cache hit: first segment was pre-computed by prewarm_with_lookahead()
+            if i == 0:
+                key = (seg_stripped, voice, round(speed, 2))
+                cached = cls._lookahead_cache.pop(key, None)
+                if cached is not None:
+                    print(f"[Kitten] Cache hit: streaming '{seg_stripped[:30]}'")
+                    audio = cached
 
             if audio is None:
-                continue
+                try:
+                    audio = await loop.run_in_executor(
+                        cls._executor,
+                        lambda s=seg_stripped: cls._model.generate(
+                            s, voice=voice, speed=speed, clean_text=False
+                        ),
+                    )
+                except Exception as e:
+                    print(f"[Kitten] Model Error on '{seg_text[:30]}': {e}")
+                    continue
 
-            # KittenTTS_1_Onnx.generate() returns shape (1, N), squeeze to (N,)
-            audio = np.asarray(audio).squeeze()
+                if audio is None:
+                    continue
+
+                # KittenTTS_1_Onnx.generate() returns shape (1, N), squeeze to (N,)
+                audio = np.asarray(audio).squeeze()
 
             last_char = seg_stripped[-1] if seg_stripped else ""
             silence_sec = _PAUSE_MAP.get(last_char, 0.1) / speed
