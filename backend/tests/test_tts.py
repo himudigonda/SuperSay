@@ -72,7 +72,7 @@ async def test_tts_engine_newlines():
         async for _ in gen:
             pass
 
-        # "Hi there" is 2 words (== _FIRST_SEG_WORDS), fits in one segment
+        # "Hi there" is 2 words (< _NORMAL_SEG_WORDS, no punctuation) → one segment
         assert mock_model.create.call_count == 1
         call_args = mock_model.create.call_args[0]
         assert "Hi there" in call_args[0]
@@ -83,7 +83,7 @@ async def test_tts_engine_no_inter_segment_fades():
     # Verify that inter-segment fades are NOT applied (removed to prevent volume dips)
     with patch.object(TTSEngine, "_model", MockKokoro()):
         # "Good morning. How are you today?" → 2 segments:
-        # "Good morning." (2 words, ≤ _FIRST_SEG_WORDS) and "How are you today?" (4 words)
+        # "Good morning." (ends with '.') and "How are you today?" (ends with '?')
         text = "Good morning. How are you today?"
 
         mock_model = MagicMock()
@@ -147,8 +147,9 @@ async def test_prewarm_with_lookahead_populates_cache():
 
     await TTSEngine.prewarm_with_lookahead("Hello world test phrase", "af_bella", 1.0)
 
-    # First segment from "Hello world test phrase" with _FIRST_SEG_WORDS=2
-    expected_seg = "Hello world"
+    # "Hello world test phrase" has no punctuation and 4 words < _NORMAL_SEG_WORDS,
+    # so it stays as a single segment (no force-split at 2 words anymore).
+    expected_seg = "Hello world test phrase"
     key = (expected_seg, "af_bella", 1.0)
     assert key in TTSEngine._lookahead_cache
     assert TTSEngine._lookahead_cache[key] is cached_audio

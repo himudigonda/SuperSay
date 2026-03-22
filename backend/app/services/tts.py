@@ -205,28 +205,27 @@ class TTSEngine:
         # Mark load time so idle_watcher doesn't immediately unload on reload.
         cls.touch()
 
-    # Maximum words for the first segment (keeps TTFA low).
-    # Profiling: 2 words ≈ 312ms, 3 words ≈ 358ms, 4 words ≈ 374ms
-    # With session opts: 2 words ≈ 280ms (saves ~94ms vs original 4-word)
-    _FIRST_SEG_WORDS = 2
-    # Minimum words before emitting subsequent segments
+    # Minimum words before emitting a segment. All segments (including the first)
+    # use this threshold — no special short-first-segment logic that caused audible
+    # gaps at high speeds (2 words play in ~100ms at 2x, but next segment takes
+    # ~350ms to generate, creating a jarring 250ms stutter).
     _NORMAL_SEG_WORDS = 5
 
     @classmethod
     def _split_segments(cls, text: str) -> list[str]:
-        """Split text into segments optimized for low TTFA.
+        """Split text into segments for streaming inference.
 
-        Strategy:
-        1. Split on punctuation to get natural sentence boundaries.
-        2. If the first natural sentence is short enough, use it as-is (fast + natural).
-        3. If the first sentence is too long, force-split at a word boundary.
-        4. Subsequent segments use normal grouping for prosody quality.
+        All segments use the same grouping threshold: emit when ≥5 words OR the
+        part ends a sentence (.!?). Short sentences (< 5 words) that end with
+        punctuation are emitted as-is; long sentences are chunked at 5-word
+        boundaries. This produces uniform segment sizes so playback transitions
+        coincide with natural pauses rather than sounding like buffering stalls.
         """
         raw_text = text.replace("\n", " ").strip()
         if not raw_text:
             return []
 
-        # --- Phase 1: Get natural punctuation-based parts ---
+        # Split on punctuation to get natural sentence/clause boundaries
         raw_parts = [
             s.strip() for s in re.split(r"(?<=[.!?|:;,]) +", raw_text) if s.strip()
         ]
@@ -234,27 +233,10 @@ class TTSEngine:
         if not raw_parts:
             return [raw_text]
 
-        # --- Phase 2: Build first segment (optimized for speed) ---
-        first_part = raw_parts[0]
-        first_words = first_part.split()
-
+        # Group parts until ≥ _NORMAL_SEG_WORDS words OR a sentence ends (.!?)
         segments = []
-        remaining_start = 1  # Index into raw_parts for Phase 3
-
-        if len(first_words) <= cls._FIRST_SEG_WORDS:
-            # First sentence is already short — use it as-is (fast + natural)
-            segments.append(first_part)
-        else:
-            # First sentence is too long — force-split at word boundary
-            segments.append(" ".join(first_words[: cls._FIRST_SEG_WORDS]))
-            leftover = " ".join(first_words[cls._FIRST_SEG_WORDS :])
-            # Prepend leftover to remaining parts for Phase 3
-            raw_parts = [leftover] + raw_parts[1:]
-            remaining_start = 0
-
-        # --- Phase 3: Group remaining parts with normal thresholds ---
         temp_seg = ""
-        for part in raw_parts[remaining_start:]:
+        for part in raw_parts:
             temp_seg += (" " + part) if temp_seg else part
             word_count = len(temp_seg.split())
             ends_sentence = temp_seg[-1] in ".!?" if temp_seg else False
