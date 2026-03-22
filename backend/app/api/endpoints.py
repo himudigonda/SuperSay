@@ -1,7 +1,7 @@
 from typing import Optional
 
 from app.services.audio import AudioService
-from app.services.tts import TTSEngine
+from app.services.engine_manager import EngineManager
 from fastapi import APIRouter, BackgroundTasks, Body, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -23,6 +23,11 @@ class PrewarmRequest(BaseModel):
     speed: Optional[float] = None
 
 
+class EngineRequest(BaseModel):
+    engine: str
+    model: Optional[str] = None
+
+
 @router.get("/health")
 def health_check():
     """
@@ -35,15 +40,30 @@ def health_check():
     The `loaded` field lets the UI distinguish "fully ready" from "cold standby"
     (model will auto-reload on the next /speak request).
     """
-    loaded = TTSEngine.is_loaded()
+    loaded = EngineManager.is_loaded()
     return {"status": "ready" if loaded else "cold", "loaded": loaded}
+
+
+@router.get("/engine")
+def get_engine():
+    """Return current active engine, model, and available voices."""
+    return EngineManager.state()
+
+
+@router.post("/engine")
+async def set_engine(req: EngineRequest):
+    """Switch active TTS engine at runtime. No restart required."""
+    if req.engine not in ("kokoro", "kitten"):
+        return Response(status_code=400, content=f"Unknown engine: {req.engine}")
+    await EngineManager.switch(req.engine, req.model)  # type: ignore[arg-type]
+    return EngineManager.state()
 
 
 async def _do_prewarm(req: Optional[PrewarmRequest]) -> None:
     """Background task: ensure model is loaded, then optionally fill lookahead cache."""
-    await TTSEngine.ensure_loaded()
+    await EngineManager.ensure_loaded()
     if req and req.text and req.voice and req.speed is not None:
-        await TTSEngine.prewarm_with_lookahead(req.text, req.voice, req.speed)
+        await EngineManager.prewarm_with_lookahead(req.text, req.voice, req.speed)
 
 
 @router.post("/prewarm")
@@ -67,12 +87,10 @@ async def prewarm(
 async def speak(req: SpeakRequest):
     try:
         # If the model was idle-unloaded, reload it now (~1.3 s warm-up).
-        # This blocks the HTTP response until the model is ready, then streams
-        # audio normally — the Swift "thinking" spinner covers the extra wait.
-        await TTSEngine.ensure_loaded()
-        TTSEngine.touch()
+        await EngineManager.ensure_loaded()
+        EngineManager.touch()
 
-        raw_samples_generator = TTSEngine.generate(req.text, req.voice, req.speed)
+        raw_samples_generator = EngineManager.generate(req.text, req.voice, req.speed)
         wav_chunk_generator = AudioService.stream_samples_to_wav(
             raw_samples_generator, req.volume
         )
