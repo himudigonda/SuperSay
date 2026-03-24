@@ -120,19 +120,15 @@ class DashboardViewModel: ObservableObject {
                     status = .speaking
                     if enableDucking { system.setMusicVolume(ducked: true) }
                 } else {
-                    // FIX: Differentiate between paused and stopped
-                    if status == .speaking {
-                        // If audio stopped playing but we were speaking, it's a PAUSE or STOP
-                        // We check the audio player's current time vs duration to guess
-                        if audio.currentTime > 0.1, audio.currentTime < audio.duration - 0.1 {
-                            status = .paused
-                        } else {
-                            status = .ready
-                        }
+                    if status == .speaking || status == .paused {
+                        // BUG FIX: use the explicit playbackCompleted flag instead of
+                        // unreliable currentTime thresholds (which were always 0 before).
+                        // playbackCompleted is set true only when the last buffer drains
+                        // naturally; manual pause leaves it false.
+                        status = audio.playbackCompleted ? .ready : .paused
                     }
 
                     if enableDucking {
-                        // Only unduck if we are truly done or paused for a while
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             if !self.audio.isPlaying {
                                 self.system.setMusicVolume(ducked: false)

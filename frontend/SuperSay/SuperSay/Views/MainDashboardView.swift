@@ -60,8 +60,7 @@ struct MainDashboardView: View {
                             .foregroundStyle(.red)
                     }
                 }
-                .id(vm.isBackendOnline) // Force redraw when online status changes
-                .id(vm.isBackendInitializing)
+                .id("\(vm.isBackendOnline)-\(vm.isBackendInitializing)")
             }
 
             Spacer()
@@ -108,7 +107,12 @@ struct MainDashboardView: View {
                     .foregroundStyle(vm.status == .speaking ? AnyShapeStyle(Color.cyan.opacity(0.6)) : AnyShapeStyle(Color.primary.opacity(0.05)))
                     .frame(width: 200, height: 200)
                     .scaleEffect(vm.status == .speaking ? 1.08 : 1.0)
-                    .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: vm.status == .speaking)
+                    .animation(
+                        vm.status == .speaking
+                            ? .easeInOut(duration: 0.8).repeatForever(autoreverses: true)
+                            : .easeInOut(duration: 0.3),
+                        value: vm.status == .speaking
+                    )
 
                 Image(systemName: "waveform")
                     .font(.system(size: 80, weight: .ultraLight))
@@ -143,7 +147,10 @@ struct MainDashboardView: View {
             }
 
             HStack(spacing: 60) {
-                TransportButton(icon: "backward.fill", size: 20) { audio.seek(to: max(0, audio.progress - 0.1)) }
+                TransportButton(icon: "backward.fill", size: 20) {
+                    let target = max(0, audio.currentTime - 10)
+                    audio.seek(to: audio.duration > 0 ? target / audio.duration : 0)
+                }
 
                 Button { vm.togglePlayback() } label: {
                     ZStack {
@@ -153,7 +160,10 @@ struct MainDashboardView: View {
                     }
                 }.buttonStyle(.plain)
 
-                TransportButton(icon: "forward.fill", size: 20) { audio.seek(to: min(1, audio.progress + 0.1)) }
+                TransportButton(icon: "forward.fill", size: 20) {
+                    let target = min(audio.duration, audio.currentTime + 10)
+                    audio.seek(to: audio.duration > 0 ? target / audio.duration : 1)
+                }
             }
         }
         .padding(.bottom, 40)

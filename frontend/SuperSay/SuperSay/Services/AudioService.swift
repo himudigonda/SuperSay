@@ -9,6 +9,8 @@ class AudioService: NSObject, ObservableObject {
     @Published var currentTime: TimeInterval = 0
     @Published var duration: TimeInterval = 0
     @Published var isDragging = false
+    /// True when the current clip played to its natural end (not manually paused/stopped).
+    @Published var playbackCompleted = false
 
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
@@ -95,6 +97,7 @@ class AudioService: NSObject, ObservableObject {
                     guard let self else { return }
                     scheduledBufferCount -= 1
                     if !isStreamActive, scheduledBufferCount == 0, isPlaying {
+                        playbackCompleted = true
                         stop()
                     }
                 }
@@ -163,6 +166,7 @@ class AudioService: NSObject, ObservableObject {
             engine.pause()
             isPlaying = false
         } else {
+            playbackCompleted = false
             try? engine.start()
             playerNode.play()
             isPlaying = true
@@ -204,19 +208,33 @@ class AudioService: NSObject, ObservableObject {
 
     func prepareForStream() {
         stop()
+        // Reset playback-position state for the new session (stop() no longer clears these).
+        progress = 0
+        currentTime = 0
+        pausedTime = 0
+        duration = 0
+        playbackCompleted = false
         isStreamActive = true
         // Pre-warm hardware: start playerNode now so it's running when first buffer arrives.
-        // stop() reset hasStartedPlayback = false; calling play() here re-arms it.
         if !engine.isRunning { try? engine.start() }
         playerNode.play()
         hasStartedPlayback = true
+        // BUG FIX: set isPlaying so all guards work and start the timer so progress updates.
+        isPlaying = true
+        startTimer()
     }
 
     func finishStream() {
         isStreamActive = false
-        // Final flush of remaining data
+        // Final flush of any leftover partial PCM byte
         if !pcmAccumulator.isEmpty {
             playChunk(Data(), volume: playerNode.volume)
+        }
+        // BUG FIX: correct duration to exact actual length now that all data has arrived.
+        // Estimated duration (text-length / 12 / speed) often overshoots — without this
+        // correction the scrub bar never reaches 100%.
+        if lastAudioData.count > 0 {
+            duration = Double(lastAudioData.count / 2) / format.sampleRate
         }
         if scheduledBufferCount == 0, isPlaying { stop() }
     }
@@ -225,9 +243,10 @@ class AudioService: NSObject, ObservableObject {
         playerNode.stop()
         timer?.cancel()
         isPlaying = false
-        progress = 0
-        currentTime = 0
-        pausedTime = 0
+        // BUG FIX: do NOT reset progress / currentTime / pausedTime / duration here.
+        // Those values are cleared in prepareForStream() when a new session begins.
+        // Keeping them lets the scrub bar stay visible and accurate after playback ends,
+        // and preserves the Save button so the user can export the last clip.
         hasStartedPlayback = false
         isStreamActive = false
         hasStrippedHeader = false
@@ -236,7 +255,6 @@ class AudioService: NSObject, ObservableObject {
         pcmAccumulator = Data()
         headerAccumulator = Data()
         estimatedDuration = 0
-        duration = 0
     }
 
     private func dataToBuffer(_ data: Data) -> AVAudioPCMBuffer? {
