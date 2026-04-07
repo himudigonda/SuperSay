@@ -76,6 +76,12 @@ class DashboardViewModel: ObservableObject {
 
     private func onEngineChanged() {
         guard isBackendOnline else { return }
+        // Stop active playback and cancel in-flight stream before switching engines
+        currentSpeakTask?.cancel()
+        currentSpeakTask = nil
+        audio.stop()
+        status = .ready
+
         // Reset voice if current selection isn't valid for the new engine
         let validIDs = availableVoices.map(\.id)
         if !validIDs.contains(selectedVoice) {
@@ -83,7 +89,11 @@ class DashboardViewModel: ObservableObject {
         }
         let engine = ttsEngine
         let model: String? = engine == "kitten" ? kittenModel : nil
-        Task { try? await backend.switchEngine(engine: engine, model: model) }
+        // Give backend stream a moment to drain before switching
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms
+            try? await backend.switchEngine(engine: engine, model: model)
+        }
     }
 
     /// Computed property for display
@@ -230,12 +240,27 @@ class DashboardViewModel: ObservableObject {
 
     func startHeartbeat() {
         heartbeatTask = Task {
-            while true {
+            var wasOnline = false
+            while !Task.isCancelled {
                 let health = await backend.checkHealth()
-                isBackendOnline = health.isOnline
+                let isNowOnline = health.isOnline
+                isBackendOnline = isNowOnline
                 isModelLoaded = health.isModelLoaded
 
-                if health.isOnline {
+                // Detect backend crash: was online, now offline
+                if wasOnline && !isNowOnline {
+                    print("⚠️ DashboardViewModel: Backend crash detected, cancelling stream")
+                    currentSpeakTask?.cancel()
+                    currentSpeakTask = nil
+                    if status == .speaking || status == .thinking {
+                        status = .ready
+                    }
+                    audio.stop()
+                }
+
+                wasOnline = isNowOnline
+
+                if isNowOnline {
                     isBackendInitializing = false
                 } else {
                     let launching = backend.isLaunching
