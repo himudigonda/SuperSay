@@ -80,7 +80,10 @@ class TTSEngine:
         print(f"[TTS] Idle for {idle:.0f}s — unloading model to free RAM")
         cls._model = None
         if cls._executor is not None:
-            cls._executor.shutdown(wait=False)
+            # Cancel any pending (not yet running) futures to clean up cleanly.
+            # wait=False prevents blocking on in-flight tasks; cancel_futures=True
+            # ensures pending tasks don't run after unload.
+            cls._executor.shutdown(wait=False, cancel_futures=True)
             cls._executor = None
         cls._lookahead_cache.clear()
         gc.collect()
