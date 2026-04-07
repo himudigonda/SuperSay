@@ -83,6 +83,17 @@ async def prewarm(
     return {"status": "warming"}
 
 
+async def _guarded_wav_stream(wav_generator):
+    """Wrap WAV streaming with error handling to log mid-stream failures gracefully."""
+    try:
+        async for chunk in wav_generator:
+            yield chunk
+    except Exception as e:
+        print(f"[API] ❌ Error during /speak streaming: {e}")
+        # Stream is already started, can't send HTTP error. Just end it.
+        return
+
+
 @router.post("/speak")
 async def speak(req: SpeakRequest):
     try:
@@ -94,9 +105,10 @@ async def speak(req: SpeakRequest):
         wav_chunk_generator = AudioService.stream_samples_to_wav(
             raw_samples_generator, req.volume
         )
+        guarded_stream = _guarded_wav_stream(wav_chunk_generator)
 
         return StreamingResponse(
-            wav_chunk_generator,
+            guarded_stream,
             media_type="audio/wav",
         )
 
