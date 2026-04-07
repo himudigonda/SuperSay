@@ -4,6 +4,7 @@ import gc
 import os
 import re
 import time
+from collections import OrderedDict
 from typing import AsyncGenerator
 
 import numpy as np
@@ -26,8 +27,9 @@ class TTSEngine:
     # Lookahead cache: stores pre-computed first-segment audio keyed by
     # (segment_text, voice, speed).  Populated by prewarm_with_lookahead()
     # and consumed (popped) by generate() on the first segment.
-    _lookahead_cache: dict = {}
-    _MAX_CACHE_ENTRIES: int = 3
+    # Uses LRU eviction: most recently hit entries stay, oldest unused are removed.
+    _lookahead_cache: OrderedDict = OrderedDict()
+    _MAX_CACHE_ENTRIES: int = 10
 
     @classmethod
     def touch(cls) -> None:
@@ -124,6 +126,8 @@ class TTSEngine:
         key = (first_seg, voice, round(speed, 2))
 
         if key in cls._lookahead_cache:
+            # Move to end to mark as recently used (LRU)
+            cls._lookahead_cache.move_to_end(key)
             print(f"[TTS] Lookahead: already cached '{first_seg[:30]}'")
             return
 
@@ -145,12 +149,12 @@ class TTSEngine:
         if audio is None:
             return
 
-        # Evict oldest entry when at capacity (FIFO)
+        # Evict LRU (oldest unused) entry when at capacity
         if len(cls._lookahead_cache) >= cls._MAX_CACHE_ENTRIES:
-            oldest_key = next(iter(cls._lookahead_cache))
-            cls._lookahead_cache.pop(oldest_key)
+            cls._lookahead_cache.popitem(last=False)  # Remove least recently used
 
         cls._lookahead_cache[key] = audio
+        cls._lookahead_cache.move_to_end(key)  # Mark as most recently used
         print(f"[TTS] Lookahead: cached '{first_seg[:30]}'")
 
     @classmethod
