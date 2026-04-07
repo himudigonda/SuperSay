@@ -31,6 +31,9 @@ class AudioService: NSObject, ObservableObject {
     /// For duration estimation
     private var estimatedDuration: TimeInterval = 0
 
+    /// Volume ramping support
+    private var volumeRampTimer: Timer?
+
     override init() {
         super.init()
         setupEngine()
@@ -89,7 +92,12 @@ class AudioService: NSObject, ObservableObject {
 
         if !isDragging {
             guard let buffer = dataToBuffer(chunkToBuffer) else { return }
-            playerNode.volume = volume
+            // Ramp volume smoothly if it changed (prevents audio pops)
+            if abs(playerNode.volume - volume) > 0.02 {
+                rampVolume(to: volume)
+            } else {
+                playerNode.volume = volume
+            }
 
             scheduledBufferCount += 1
             playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
@@ -267,6 +275,39 @@ class AudioService: NSObject, ObservableObject {
             }
         }
         return buffer
+    }
+
+    /// Smoothly ramp volume to target over 50ms (5 steps of 10ms each) to avoid pops
+    private func rampVolume(to targetVolume: Float) {
+        volumeRampTimer?.invalidate()
+
+        let initialVolume = playerNode.volume
+        guard abs(initialVolume - targetVolume) > 0.01 else {
+            playerNode.volume = targetVolume
+            return
+        }
+
+        let steps = 5
+        let stepDuration = 0.01  // 10ms per step
+        let delta = (targetVolume - initialVolume) / Float(steps)
+        var step = 0
+
+        volumeRampTimer = Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            step += 1
+            let newVolume = initialVolume + delta * Float(step)
+            // Must dispatch to MainActor since timer runs on a different queue
+            DispatchQueue.main.async {
+                self.playerNode.volume = newVolume
+            }
+            if step >= steps {
+                DispatchQueue.main.async {
+                    self.playerNode.volume = targetVolume
+                    self.volumeRampTimer = nil
+                }
+                timer.invalidate()
+            }
+        }
     }
 
     func exportToDesktop() {
