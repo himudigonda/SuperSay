@@ -5,6 +5,7 @@ import Foundation
 /// A thread-safe service to manage the Python backend process and handle streaming requests.
 final class BackendService: NSObject, @unchecked Sendable {
     private var process: Process?
+    private var processPipe: Pipe?
     private let stateQueue = DispatchQueue(label: "com.supersay.backend.state", qos: .userInitiated)
 
     // Thread-safe state managed by stateQueue
@@ -83,7 +84,10 @@ final class BackendService: NSObject, @unchecked Sendable {
 
         do {
             try p.run()
-            stateQueue.sync { self.process = p }
+            stateQueue.sync {
+                self.process = p
+                self.processPipe = pipe  // Store pipe reference for cleanup on stop
+            }
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -97,8 +101,11 @@ final class BackendService: NSObject, @unchecked Sendable {
 
     func stop() {
         stateQueue.sync {
+            // Close pipe readability handler to avoid file descriptor leak on restart
+            processPipe?.fileHandleForReading.readabilityHandler = nil
             process?.terminate()
             process = nil
+            processPipe = nil
         }
 
         let task = Process()
