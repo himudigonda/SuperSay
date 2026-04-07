@@ -97,6 +97,7 @@ class DashboardViewModel: ObservableObject {
     }
 
     private var currentSpeakTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -228,7 +229,7 @@ class DashboardViewModel: ObservableObject {
     }
 
     func startHeartbeat() {
-        Task {
+        heartbeatTask = Task {
             while true {
                 let health = await backend.checkHealth()
                 isBackendOnline = health.isOnline
@@ -245,6 +246,11 @@ class DashboardViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
             }
         }
+    }
+
+    func stopHeartbeat() {
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
     }
 
     /// Pre-warm the model before the user speaks, hiding the ~1.3 s cold-reload cost.

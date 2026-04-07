@@ -104,7 +104,12 @@ final class BackendService: NSObject, @unchecked Sendable {
         let task = Process()
         task.launchPath = "/usr/bin/pkill"
         task.arguments = ["-9", "-f", "SuperSayServer"]
-        try? task.run()
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            // Silently ignore if pkill fails (process may not exist)
+        }
     }
 
     func exportLogs() {

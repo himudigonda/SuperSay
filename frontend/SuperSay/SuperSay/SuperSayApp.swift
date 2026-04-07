@@ -4,6 +4,9 @@ import UserNotifications
 
 @main
 struct SuperSayApp: App {
+    // 0. App Lifecycle Management
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     // 1. Single Sources of Truth (Services)
     @StateObject private var audio: AudioService
     @StateObject private var history: HistoryManager
@@ -160,6 +163,7 @@ struct SuperSayApp: App {
             Button("Speak Selection") { Task { await dashboardVM.speakSelection() } }
             Button("Stop") { audio.stop() }
             Button("Quit") {
+                dashboardVM.stopHeartbeat()
                 Task { await backend.stop() }
                 NSApplication.shared.terminate(nil)
             }
