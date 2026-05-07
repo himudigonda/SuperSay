@@ -36,10 +36,6 @@ struct SuperSayWindow: View {
                             Label("Now Playing", systemImage: "play.circle.fill")
                                 .font(vm.appFont(size: 13))
                         }
-                        NavigationLink(value: "library") {
-                            Label("Audiobooks", systemImage: "book.closed.fill")
-                                .font(vm.appFont(size: 13))
-                        }
                         NavigationLink(value: "history") {
                             Label("The Vault", systemImage: "clock.arrow.circlepath")
                                 .font(vm.appFont(size: 13))
@@ -179,7 +175,6 @@ struct SuperSayWindow: View {
     private var detailContent: some View {
         switch vm.selectedTab {
         case "home": MainDashboardView()
-        case "library": LibraryView()
         case "history": VaultView()
         case "preferences": PreferencesView()
         default: MainDashboardView()

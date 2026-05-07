@@ -13,9 +13,19 @@ class DashboardViewModel: ObservableObject {
     @Published var status: AppStatus = .ready
     @Published var isBackendOnline = false
     @Published var isBackendInitializing = true // Start as initializing
+    @Published var isModelLoaded = false        // Model in ONNX session RAM
     @Published var selectedTab: String? = "home"
 
+    // Clipboard monitoring for anticipatory pre-warm
+    private var lastPasteboardChangeCount = NSPasteboard.general.changeCount
+
     @AppStorage("selectedVoice") var selectedVoice = "af_bella"
+    @AppStorage("ttsEngine") var ttsEngine = "kokoro" {
+        didSet { onEngineChanged() }
+    }
+    @AppStorage("kittenModel") var kittenModel = "nano" {
+        didSet { onEngineChanged() }
+    }
     @AppStorage("speechSpeed") var speechSpeed = 1.0
     @AppStorage("speechVolume") var speechVolume = 1.0
     @AppStorage("enableDucking") var enableDucking = true
@@ -48,6 +58,44 @@ class DashboardViewModel: ObservableObject {
         }
     }
 
+    private static let kokoroVoices: [(id: String, display: String)] = [
+        ("af_bella", "🇺🇸 Bella"), ("af_sarah", "🇺🇸 Sarah"),
+        ("am_adam", "🇺🇸 Adam"), ("am_michael", "🇺🇸 Michael"),
+        ("bf_emma", "🇬🇧 Emma"), ("bf_isabella", "🇬🇧 Isabella"),
+        ("bm_george", "🇬🇧 George"), ("bm_lewis", "🇬🇧 Lewis"),
+    ]
+
+    private static let kittenVoices: [(id: String, display: String)] = [
+        ("Bella", "Bella"), ("Jasper", "Jasper"), ("Luna", "Luna"), ("Bruno", "Bruno"),
+        ("Rosie", "Rosie"), ("Hugo", "Hugo"), ("Kiki", "Kiki"), ("Leo", "Leo"),
+    ]
+
+    var availableVoices: [(id: String, display: String)] {
+        ttsEngine == "kitten" ? Self.kittenVoices : Self.kokoroVoices
+    }
+
+    private func onEngineChanged() {
+        guard isBackendOnline else { return }
+        // Stop active playback and cancel in-flight stream before switching engines
+        currentSpeakTask?.cancel()
+        currentSpeakTask = nil
+        audio.stop()
+        status = .ready
+
+        // Reset voice if current selection isn't valid for the new engine
+        let validIDs = availableVoices.map(\.id)
+        if !validIDs.contains(selectedVoice) {
+            selectedVoice = ttsEngine == "kitten" ? "Bella" : "af_bella"
+        }
+        let engine = ttsEngine
+        let model: String? = engine == "kitten" ? kittenModel : nil
+        // Give backend stream a moment to drain before switching
+        Task {
+            try? await Task.sleep(nanoseconds: 300_000_000)  // 300ms
+            try? await backend.switchEngine(engine: engine, model: model)
+        }
+    }
+
     /// Computed property for display
     var currentVoiceDisplay: String {
         selectedVoice.replacingOccurrences(of: "_", with: " ").capitalized
@@ -59,6 +107,7 @@ class DashboardViewModel: ObservableObject {
     }
 
     private var currentSpeakTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
 
     private var cancellables = Set<AnyCancellable>()
 
@@ -70,6 +119,7 @@ class DashboardViewModel: ObservableObject {
 
         setupBindings()
         startHeartbeat()
+        startPrewarmObservers()
     }
 
     private func setupBindings() {
@@ -81,19 +131,15 @@ class DashboardViewModel: ObservableObject {
                     status = .speaking
                     if enableDucking { system.setMusicVolume(ducked: true) }
                 } else {
-                    // FIX: Differentiate between paused and stopped
-                    if status == .speaking {
-                        // If audio stopped playing but we were speaking, it's a PAUSE or STOP
-                        // We check the audio player's current time vs duration to guess
-                        if audio.currentTime > 0.1, audio.currentTime < audio.duration - 0.1 {
-                            status = .paused
-                        } else {
-                            status = .ready
-                        }
+                    if status == .speaking || status == .paused {
+                        // BUG FIX: use the explicit playbackCompleted flag instead of
+                        // unreliable currentTime thresholds (which were always 0 before).
+                        // playbackCompleted is set true only when the last buffer drains
+                        // naturally; manual pause leaves it false.
+                        status = audio.playbackCompleted ? .ready : .paused
                     }
 
                     if enableDucking {
-                        // Only unduck if we are truly done or paused for a while
                         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                             if !self.audio.isPlaying {
                                 self.system.setMusicVolume(ducked: false)
@@ -127,7 +173,7 @@ class DashboardViewModel: ObservableObject {
             print("DEBUG [DashboardVM] Starting new speak task")
             status = .thinking
 
-            let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true))
+            let cleaned = TextProcessor.sanitize(text, options: .init(cleanURLs: cleanURLs, cleanHandles: true, fixLigatures: true, expandAbbr: true, expandNumbers: true))
             audio.setEstimatedDuration(textLength: cleaned.count, speed: speechSpeed)
 
             // This resets the AudioService buffers
@@ -193,30 +239,80 @@ class DashboardViewModel: ObservableObject {
     }
 
     func startHeartbeat() {
-        Task {
-            while true {
-                isBackendOnline = await backend.checkHealth()
+        heartbeatTask = Task {
+            var wasOnline = false
+            while !Task.isCancelled {
+                let health = await backend.checkHealth()
+                let isNowOnline = health.isOnline
+                isBackendOnline = isNowOnline
+                isModelLoaded = health.isModelLoaded
 
-                DispatchQueue.main.async {
-                    if self.isBackendOnline {
-                        self.isBackendInitializing = false
-                    } else {
-                        // If we are offline, we are likely initializing or failed
-                        // We let BackendService's isLaunching state dictate this implicitly,
-                        // but for now, if offline, we assume initializing loop
-                        Task {
-                            let launching = self.backend.isLaunching
-                            DispatchQueue.main.async {
-                                self.isBackendInitializing = launching
-                            }
-                        }
+                // Detect backend crash: was online, now offline
+                if wasOnline && !isNowOnline {
+                    print("⚠️ DashboardViewModel: Backend crash detected, cancelling stream")
+                    currentSpeakTask?.cancel()
+                    currentSpeakTask = nil
+                    if status == .speaking || status == .thinking {
+                        status = .ready
                     }
+                    audio.stop()
                 }
 
-                if !isBackendOnline { await backend.start() }
-                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000) // 5 seconds between checks
+                wasOnline = isNowOnline
+
+                if isNowOnline {
+                    isBackendInitializing = false
+                } else {
+                    let launching = backend.isLaunching
+                    isBackendInitializing = launching
+                    await backend.start()
+                }
+
+                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
             }
         }
+    }
+
+    func stopHeartbeat() {
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+    }
+
+    /// Pre-warm the model before the user speaks, hiding the ~1.3 s cold-reload cost.
+    ///
+    /// Two signals trigger this:
+    /// 1. The clipboard changes — user just copied text and will likely press the hotkey.
+    /// 2. The app becomes active — user switched to SuperSay to type/speak directly.
+    ///
+    /// In both cases the backend starts loading the ONNX model in the background.
+    /// By the time the user actually presses the hotkey (typically 0.5–3 s later),
+    /// the model is already warm and /speak returns audio with normal ~300 ms latency.
+    private func startPrewarmObservers() {
+        // Signal 1: clipboard change — always prewarm (model load + lookahead cache).
+        // No !isModelLoaded guard: even when warm, we want to pre-compute the first
+        // audio segment so /speak finds it cached and streams it in <20ms.
+        Timer.publish(every: 1.0, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let current = NSPasteboard.general.changeCount
+                guard current != self.lastPasteboardChangeCount else { return }
+                self.lastPasteboardChangeCount = current
+                guard self.isBackendOnline else { return }
+                let text = NSPasteboard.general.string(forType: .string) ?? ""
+                let voice = self.selectedVoice
+                let speed = self.speechSpeed
+                Task { await self.backend.prewarm(text: text, voice: voice, speed: speed) }
+            }
+            .store(in: &cancellables)
+
+        // Signal 2: app focus — only loads the model (no lookahead; unknown text).
+        NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)
+            .sink { [weak self] _ in
+                guard let self, self.isBackendOnline, !self.isModelLoaded else { return }
+                Task { await self.backend.prewarm() }
+            }
+            .store(in: &cancellables)
     }
 
     /// --- FONT PANEL SUPPORT ---

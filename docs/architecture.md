@@ -82,10 +82,3 @@ To avoid requiring users to install Python or ONNX:
 2.  **Zipping:** The binary and models (`kokoro-v1.0.onnx`) are zipped into `SuperSayServer.zip`.
 3.  **LaunchManager:** On first launch, the Swift app extracts this zip to `~/Library/Application Support/SuperSayServer` and manages its lifecycle via `localhost:10101`.
 
-## 🎓 Academic PDF Pipeline
-
-The `PDFService` uses a multi-pass approach for research papers:
-
--   **Pass 1 (Statistical):** Identifies headers/footers by counting line frequency across pages (lines appearing on >30% of pages are scrubbed).
--   **Pass 2 (Regex):** Strips IEEE and APA citations.
--   **Pass 3 (Cleanup):** Reconstructs words split by line-break hyphens.

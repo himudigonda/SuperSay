@@ -25,22 +25,47 @@ struct PreferencesView: View {
                 PreferenceSection(title: "Voice Engine", icon: "cpu") {
                     VStack(spacing: 20) {
                         HStack {
+                            Label("TTS Engine", systemImage: "cpu")
+                                .font(vm.appFont(size: 14))
+                            Spacer()
+                            Picker("", selection: $vm.ttsEngine) {
+                                Text("Kokoro").tag("kokoro")
+                                Text("KittenTTS").tag("kitten")
+                            }
+                            .frame(width: 150)
+                            .labelsHidden()
+                        }
+
+                        if vm.ttsEngine == "kitten" {
+                            HStack {
+                                Label("Model Variant", systemImage: "sparkles")
+                                    .font(vm.appFont(size: 14))
+                                Spacer()
+                                Picker("", selection: $vm.kittenModel) {
+                                    Text("Nano — 15M").tag("nano")
+                                    Text("Micro — 40M").tag("micro")
+                                    Text("Mini — 80M").tag("mini")
+                                }
+                                .frame(width: 150)
+                                .labelsHidden()
+                            }
+                        }
+
+                        Text(vm.ttsEngine == "kitten"
+                             ? "KittenTTS is faster and smaller. Kokoro offers more voices."
+                             : "Kokoro delivers high-quality, expressive voices.")
+                            .font(vm.appFont(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        HStack {
                             Label("Active Voice", systemImage: "person.wave.2")
                                 .font(vm.appFont(size: 14))
                             Spacer()
                             Picker("", selection: $vm.selectedVoice) {
-                                Group {
-                                    Text("🇺🇸 Bella").tag("af_bella")
-                                    Text("🇺🇸 Sarah").tag("af_sarah")
-                                    Text("🇺🇸 Adam").tag("am_adam")
-                                    Text("🇺🇸 Michael").tag("am_michael")
-                                }
-                                Divider()
-                                Group {
-                                    Text("🇬🇧 Emma").tag("bf_emma")
-                                    Text("🇬🇧 Isabella").tag("bf_isabella")
-                                    Text("🇬🇧 George").tag("bm_george")
-                                    Text("🇬🇧 Lewis").tag("bm_lewis")
+                                ForEach(vm.availableVoices, id: \.id) { voice in
+                                    Text(voice.display).tag(voice.id)
                                 }
                             }
                             .frame(width: 150)

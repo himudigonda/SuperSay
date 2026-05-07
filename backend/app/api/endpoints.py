@@ -1,8 +1,8 @@
-from app.services.audio import AudioService
-from app.services.tts import TTSEngine
-from fastapi import APIRouter, HTTPException, Response
+from typing import Optional
 
-# NEW: Import StreamingResponse
+from app.services.audio import AudioService
+from app.services.engine_manager import EngineManager
+from fastapi import APIRouter, BackgroundTasks, Body, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -17,49 +17,101 @@ class SpeakRequest(BaseModel):
     lang: str = "en-us"
 
 
+class PrewarmRequest(BaseModel):
+    text: Optional[str] = None
+    voice: Optional[str] = None
+    speed: Optional[float] = None
+
+
+class EngineRequest(BaseModel):
+    engine: str
+    model: Optional[str] = None
+
+
 @router.get("/health")
 def health_check():
     """
     Swift polls this to know when the backend is ready.
+
+    Always returns HTTP 200 while the server process is running — even when the
+    ONNX model has been idle-unloaded. Returning 503 here would cause the Swift
+    heartbeat to kill and restart the entire process unnecessarily.
+
+    The `loaded` field lets the UI distinguish "fully ready" from "cold standby"
+    (model will auto-reload on the next /speak request).
     """
-    if TTSEngine._model is None:
-        raise HTTPException(status_code=503, detail="Initializing")
-    return {"status": "ok", "model": "loaded"}
+    loaded = EngineManager.is_loaded()
+    return {"status": "ready" if loaded else "cold", "loaded": loaded}
+
+
+@router.get("/engine")
+def get_engine():
+    """Return current active engine, model, and available voices."""
+    return EngineManager.state()
+
+
+@router.post("/engine")
+async def set_engine(req: EngineRequest):
+    """Switch active TTS engine at runtime. No restart required."""
+    if req.engine not in ("kokoro", "kitten"):
+        return Response(status_code=400, content=f"Unknown engine: {req.engine}")
+    await EngineManager.switch(req.engine, req.model)  # type: ignore[arg-type]
+    return EngineManager.state()
+
+
+async def _do_prewarm(req: Optional[PrewarmRequest]) -> None:
+    """Background task: ensure model is loaded, then optionally fill lookahead cache."""
+    await EngineManager.ensure_loaded()
+    if req and req.text and req.voice and req.speed is not None:
+        await EngineManager.prewarm_with_lookahead(req.text, req.voice, req.speed)
+
+
+@router.post("/prewarm")
+async def prewarm(
+    background_tasks: BackgroundTasks,
+    req: Optional[PrewarmRequest] = Body(default=None),
+):
+    """
+    Fire-and-forget warm-up: called by the Swift client when it detects a clipboard
+    change or the app gains focus, before the user has pressed the hotkey.
+
+    Returns immediately. When a JSON body with {text, voice, speed} is provided,
+    the backend also pre-runs inference on the first text segment and caches the
+    audio so /speak can stream it instantly (cache-hit TTFA <20ms).
+    """
+    background_tasks.add_task(_do_prewarm, req)
+    return {"status": "warming"}
+
+
+async def _guarded_wav_stream(wav_generator):
+    """Wrap WAV streaming with error handling to log mid-stream failures gracefully."""
+    try:
+        async for chunk in wav_generator:
+            yield chunk
+    except Exception as e:
+        print(f"[API] ❌ Error during /speak streaming: {e}")
+        # Stream is already started, can't send HTTP error. Just end it.
+        return
 
 
 @router.post("/speak")
 async def speak(req: SpeakRequest):
     try:
-        print("DEBUG [API] >>> New Request Received")
-        print(f'DEBUG [API] Text: "{req.text}"')
-        print(
-            f"DEBUG [API] Voice: {req.voice}, Speed: {req.speed}, Volume: {req.volume}"
-        )
+        # If the model was idle-unloaded, reload it now (~1.3 s warm-up).
+        await EngineManager.ensure_loaded()
+        EngineManager.touch()
 
-        # Check if model is initialized early to catch errors before streaming
-        if TTSEngine._model is None:
-            raise RuntimeError("Model not initialized")
-
-        # TTSEngine.generate is now an async generator
-        raw_samples_generator = TTSEngine.generate(req.text, req.voice, req.speed)
-        print(
-            f'DEBUG [TTS] >>> Starting Generation for: "{req.text[:50]}..."'
-        )  # Added tracing log here
-
-        # AudioService.stream_samples_to_wav is now an async generator
+        raw_samples_generator = EngineManager.generate(req.text, req.voice, req.speed)
         wav_chunk_generator = AudioService.stream_samples_to_wav(
             raw_samples_generator, req.volume
         )
+        guarded_stream = _guarded_wav_stream(wav_chunk_generator)
 
-        # Use StreamingResponse to send the audio chunks as they are generated
         return StreamingResponse(
-            wav_chunk_generator,
-            media_type="audio/wav",  # Client will interpret this as a stream
+            guarded_stream,
+            media_type="audio/wav",
         )
 
     except Exception as e:
         print(f"[API] ❌ POST /speak Error: {e}")
-        # Return HTTP 503 if the model is not ready, otherwise a generic 500
-        if "Model not initialized" in str(e):
-            raise HTTPException(status_code=503, detail="Initializing")
         return Response(status_code=500, content=str(e))
