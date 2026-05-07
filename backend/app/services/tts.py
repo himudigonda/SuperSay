@@ -182,13 +182,12 @@ class TTSEngine:
                 sess_options.graph_optimization_level = (
                     ort.GraphOptimizationLevel.ORT_ENABLE_ALL
                 )
-                # 6 intra-op threads is optimal on Apple Silicon (benchmarked on
-                # M2 Pro: 6 threads = 271ms min vs auto = 298ms min for 2-word seg)
-                sess_options.intra_op_num_threads = min(6, os.cpu_count() or 4)
-                # Keep threads spinning for lower latency (trades CPU for speed)
-                sess_options.add_session_config_entry(
-                    "session.intra_op.allow_spinning", "1"
-                )
+                # 4 intra-op threads: good balance on Apple Silicon — near-min latency
+                # without the idle-CPU cost of spinning. (6 threads only saves ~27ms
+                # but spinning burns 600%+ idle CPU — wrong trade-off for a desktop app.)
+                sess_options.intra_op_num_threads = min(4, os.cpu_count() or 2)
+                # Do NOT set allow_spinning=1: spinning makes ORT threads busy-wait
+                # at 100% CPU even between inferences (6 threads = 600% idle CPU).
 
                 # CPU-only: CoreML partitions only 43% of Kokoro's nodes, and the
                 # data transfer overhead between CoreML and CPU makes it slower overall
