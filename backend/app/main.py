@@ -22,6 +22,13 @@ async def lifespan(app: FastAPI):
     from app.services.kitten_engine import KittenEngine
 
     asyncio.create_task(KittenEngine.idle_watcher())
+
+    # Audiobook orchestrator + crash-recovery
+    from app.services.audiobook_service import AudiobookService
+
+    AudiobookService.initialize()
+    asyncio.create_task(AudiobookService.resume_in_progress())
+
     yield
     # Shutdown (if needed)
 

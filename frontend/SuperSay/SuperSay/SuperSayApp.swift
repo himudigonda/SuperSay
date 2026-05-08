@@ -15,6 +15,9 @@ struct SuperSayApp: App {
     /// 2. Logic Controller (ViewModel)
     @StateObject private var dashboardVM: DashboardViewModel
 
+    /// Audiobook ViewModel (own state)
+    @StateObject private var audiobookVM: AudiobookViewModel
+
     /// 3. Backend (Kept private, managed by VM, but we own the instance to stop deinit)
     private let backend: BackendService
 
@@ -52,11 +55,18 @@ struct SuperSayApp: App {
             history: historyInstance
         )
 
+        // Audiobook VM uses the same shared AudioService for playback
+        let audiobookInstance = AudiobookViewModel(audio: audioInstance)
+
         // Assign to StateObjects
         _audio = StateObject(wrappedValue: audioInstance)
         _history = StateObject(wrappedValue: historyInstance)
         _launchManager = StateObject(wrappedValue: launchInstance)
         _dashboardVM = StateObject(wrappedValue: vmInstance)
+        _audiobookVM = StateObject(wrappedValue: audiobookInstance)
+
+        // Wire mutual exclusion between TTS hotkey playback and audiobook playback
+        vmInstance.audiobookVM = audiobookInstance
 
         backend = backendInstance
 
@@ -155,6 +165,7 @@ struct SuperSayApp: App {
                 .environmentObject(audio)
                 .environmentObject(history)
                 .environmentObject(launchManager)
+                .environmentObject(audiobookVM)
         }
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["dashboard"])

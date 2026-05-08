@@ -12,6 +12,48 @@ class AudioService: NSObject, ObservableObject {
     /// True when the current clip played to its natural end (not manually paused/stopped).
     @Published var playbackCompleted = false
 
+    /// 0...1.5 (matches existing speechVolume range used elsewhere for TTS).
+    /// Mirrors `playerNode.volume`. Use `setVolume(_:)` to change it; the
+    /// setter ramps for ~50ms to avoid pops.
+    @Published private(set) var volume: Float = 1.0
+
+    /// Fade volume to zero over `seconds`, then stop. Used when TTS hotkey
+    /// preempts audiobook playback so we don't get an abrupt click (P11).
+    func fadeOutAndStop(over seconds: TimeInterval = 0.15) {
+        guard isPlaying else { stop(); return }
+        let originalVolume = volume
+        let steps = max(3, Int(seconds / 0.02))
+        let stepDuration = seconds / Double(steps)
+        let delta = originalVolume / Float(steps)
+        var step = 0
+        volumeRampTimer?.invalidate()
+        volumeRampTimer = Timer.scheduledTimer(withTimeInterval: stepDuration, repeats: true) { [weak self] timer in
+            DispatchQueue.main.async {
+                guard let self else { timer.invalidate(); return }
+                step += 1
+                let v = max(0, originalVolume - delta * Float(step))
+                self.playerNode.volume = v
+                if step >= steps {
+                    timer.invalidate()
+                    self.volumeRampTimer = nil
+                    self.stop()
+                    self.volume = originalVolume  // restore for next play
+                    self.playerNode.volume = originalVolume
+                }
+            }
+        }
+    }
+
+    func setVolume(_ newValue: Float) {
+        let clamped = max(0, min(1.5, newValue))
+        volume = clamped
+        if abs(playerNode.volume - clamped) > 0.01 {
+            rampVolume(to: clamped)
+        } else {
+            playerNode.volume = clamped
+        }
+    }
+
     private let engine = AVAudioEngine()
     private let playerNode = AVAudioPlayerNode()
     private let format = AVAudioFormat(commonFormat: .pcmFormatInt16, sampleRate: 24000, channels: 1, interleaved: false)!
@@ -263,6 +305,9 @@ class AudioService: NSObject, ObservableObject {
         pcmAccumulator = Data()
         headerAccumulator = Data()
         estimatedDuration = 0
+        currentAudioFile = nil
+        audiobookFrameOffset = 0
+        audiobookTotalFrames = 0
     }
 
     private func dataToBuffer(_ data: Data) -> AVAudioPCMBuffer? {
@@ -308,6 +353,127 @@ class AudioService: NSObject, ObservableObject {
                 timer.invalidate()
             }
         }
+    }
+
+    // MARK: - Audiobook playback (chunked, file-backed)
+    //
+    // Audiobooks can be hours long (≥300 MB on disk). The original
+    // implementation read the entire WAV into one PCM buffer — for a 2 h book
+    // that's ~680 MB resident, which OOM-killed the app on real content
+    // (C9). We now stream from the file in 30 s chunks, refilling as
+    // playback advances.
+
+    /// Currently-playing audiobook file (kept for chunked refills + seek).
+    private var currentAudioFile: AVAudioFile?
+    private var audiobookFrameOffset: AVAudioFramePosition = 0
+    private var audiobookTotalFrames: AVAudioFramePosition = 0
+    private var audiobookSampleRate: Double = 24000
+    private static let audiobookChunkSeconds: Double = 30
+    /// Number of pre-scheduled chunks ahead of the current play head.
+    private static let audiobookChunkLookahead: Int = 2
+
+    /// Open a local WAV file and start chunked playback from frame 0.
+    func loadAndPlayWAV(at url: URL) throws {
+        stop()
+        progress = 0
+        currentTime = 0
+        pausedTime = 0
+        playbackCompleted = false
+        isStreamActive = false
+        hasStrippedHeader = true
+
+        let file = try AVAudioFile(forReading: url)
+        currentAudioFile = file
+        audiobookSampleRate = file.processingFormat.sampleRate
+        audiobookTotalFrames = file.length
+        audiobookFrameOffset = 0
+        duration = Double(file.length) / audiobookSampleRate
+        // Used by exportToDesktop() and seek()'s legacy code path: we only
+        // populate `lastAudioData` lazily in `seek()` if needed for backward
+        // compat, otherwise leave it empty to avoid the RAM blowup.
+        lastAudioData = Data()
+
+        if !engine.isRunning { try engine.start() }
+        playerNode.volume = volume
+
+        // Schedule the first N chunks ahead. As each completes we schedule
+        // the next one to keep the lookahead full.
+        for _ in 0..<Self.audiobookChunkLookahead {
+            scheduleNextAudiobookChunk()
+        }
+        playerNode.play()
+        isPlaying = true
+        hasStartedPlayback = true
+        startTimer()
+    }
+
+    /// Pull the next chunk from `currentAudioFile` starting at
+    /// `audiobookFrameOffset`, schedule it on the player node, and advance
+    /// the offset. When the file is exhausted, mark `playbackCompleted` and
+    /// stop on the last buffer drain.
+    private func scheduleNextAudiobookChunk() {
+        guard let file = currentAudioFile else { return }
+        if audiobookFrameOffset >= audiobookTotalFrames { return }
+        let chunkFrames = AVAudioFrameCount(
+            min(
+                AVAudioFramePosition(Self.audiobookChunkSeconds * audiobookSampleRate),
+                audiobookTotalFrames - audiobookFrameOffset
+            )
+        )
+        guard chunkFrames > 0,
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: file.processingFormat,
+                frameCapacity: chunkFrames
+              )
+        else { return }
+        do {
+            file.framePosition = audiobookFrameOffset
+            try file.read(into: buffer, frameCount: chunkFrames)
+        } catch {
+            print("❌ AudioService: chunk read error: \(error)")
+            return
+        }
+        audiobookFrameOffset += AVAudioFramePosition(buffer.frameLength)
+
+        scheduledBufferCount += 1
+        playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                scheduledBufferCount -= 1
+                // Refill: keep the lookahead window full as long as we have file left.
+                if currentAudioFile != nil, audiobookFrameOffset < audiobookTotalFrames {
+                    scheduleNextAudiobookChunk()
+                }
+                // End-of-file: when the last buffer drains, mark complete.
+                if scheduledBufferCount == 0, isPlaying,
+                   audiobookFrameOffset >= audiobookTotalFrames {
+                    playbackCompleted = true
+                    stop()
+                }
+            }
+        })
+    }
+
+    /// Seek for chunked audiobook playback. Resets the file head and schedules
+    /// fresh chunks at the target frame.
+    func seekAudiobook(toSeconds seconds: TimeInterval) {
+        guard let _ = currentAudioFile else {
+            seek(to: max(0, min(1, seconds / max(0.01, duration))))
+            return
+        }
+        playerNode.stop()
+        scheduledBufferCount = 0
+        let target = max(0, min(audiobookTotalFrames, AVAudioFramePosition(seconds * audiobookSampleRate)))
+        audiobookFrameOffset = target
+        currentTime = Double(target) / audiobookSampleRate
+        pausedTime = currentTime
+        for _ in 0..<Self.audiobookChunkLookahead {
+            scheduleNextAudiobookChunk()
+        }
+        if !engine.isRunning { try? engine.start() }
+        playerNode.play()
+        isPlaying = true
+        startTimer()
     }
 
     func exportToDesktop() {

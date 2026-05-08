@@ -34,10 +34,22 @@ CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name
     --collect-all 'kokoro_onnx' \
     --collect-all 'kittentts' \
     --collect-all 'misaki' \
+    --collect-all 'pdfplumber' \
+    --collect-all 'pdfminer' \
+    --collect-all 'pypdfium2' \
+    --collect-all 'pypdfium2_raw' \
+    --collect-all 'google.generativeai' \
+    --collect-all 'PIL' \
     --hidden-import 'uvicorn.loops.asyncio' \
     --hidden-import 'uvicorn.protocols.http.h11_impl' \
     --hidden-import 'fastapi' \
-    --hidden-import 'starlette'"
+    --hidden-import 'starlette' \
+    --hidden-import 'python_multipart' \
+    --hidden-import 'multipart' \
+    --hidden-import 'google.api_core' \
+    --hidden-import 'google.auth' \
+    --hidden-import 'pdfminer.layout' \
+    --hidden-import 'pdfminer.high_level'"
 
 # Add optional micro variant files (skip if not downloaded)
 if [ -f kitten-micro.onnx ]; then

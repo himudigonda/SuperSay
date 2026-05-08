@@ -16,6 +16,9 @@ class DashboardViewModel: ObservableObject {
     @Published var isModelLoaded = false        // Model in ONNX session RAM
     @Published var selectedTab: String? = "home"
 
+    /// Set after init by SuperSayApp so the TTS speak path can stop any audiobook playback.
+    weak var audiobookVM: AudiobookViewModel?
+
     // Clipboard monitoring for anticipatory pre-warm
     private var lastPasteboardChangeCount = NSPasteboard.general.changeCount
 
@@ -168,6 +171,16 @@ class DashboardViewModel: ObservableObject {
     func speak(text: String) async {
         // --- FIX: Cancel the previous stream task if it exists ---
         currentSpeakTask?.cancel()
+
+        // Mutual exclusion: a hotkey TTS request always interrupts audiobook playback.
+        // The backend `/speak` endpoint also acquires a preemption lock so any in-flight
+        // audiobook generation pauses between pages. Here we fade-stop frontend
+        // playback (P11) instead of an abrupt stop so there's no click.
+        if let avm = audiobookVM, avm.nowPlaying != nil {
+            avm.audio.fadeOutAndStop(over: 0.12)
+            avm.nowPlaying = nil
+            avm.currentTranscript = nil
+        }
 
         currentSpeakTask = Task {
             print("DEBUG [DashboardVM] Starting new speak task")

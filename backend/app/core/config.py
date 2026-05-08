@@ -54,5 +54,18 @@ class Settings(BaseSettings):
         """Return the path to a KittenTTS config JSON for the given variant."""
         return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}-config.json")
 
+    @property
+    def USER_DATA_DIR(self) -> str:
+        """Writable user-data dir for audiobooks. Cleaned by `make nuke`."""
+        return os.path.expanduser(
+            "~/Library/Application Support/com.himudigonda.SuperSay"
+        )
+
+    @property
+    def AUDIOBOOKS_DIR(self) -> str:
+        path = os.path.join(self.USER_DATA_DIR, "audiobooks")
+        os.makedirs(path, exist_ok=True)
+        return path
+
 
 settings = Settings()

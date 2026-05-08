@@ -13,6 +13,12 @@ from app.core.config import settings
 from app.services.audio import AudioService
 from kokoro_onnx import Kokoro
 
+# Module-level preemption lock: interactive /speak holds this; the audiobook
+# TTS phase awaits it between every page so a hotkey request fires within one
+# page-generation latency (≈350 ms) and the audiobook job pauses gracefully
+# until the interactive request finishes, then resumes the next page.
+interactive_tts_lock: asyncio.Lock = asyncio.Lock()
+
 
 class TTSEngine:
     _instance = None

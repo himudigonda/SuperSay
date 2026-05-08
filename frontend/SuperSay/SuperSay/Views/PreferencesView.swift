@@ -5,6 +5,7 @@ struct PreferencesView: View {
     @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var launchManager: LaunchManager
+    @EnvironmentObject var bookVM: AudiobookViewModel
 
     @AppStorage("showMenuBarIcon") var showMenuBarIcon = true
 
@@ -99,6 +100,95 @@ struct PreferencesView: View {
                             Slider(value: $vm.speechVolume, in: 0.0 ... 1.5)
                                 .tint(.cyan)
                         }
+                    }
+                }
+
+                // Section: Audiobooks
+                PreferenceSection(title: "Audiobooks", icon: "books.vertical") {
+                    VStack(alignment: .leading, spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label("Gemini API Key", systemImage: "key.fill")
+                                    .font(vm.appFont(size: 14))
+                                Spacer()
+                                if bookVM.keyVerified {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.seal.fill")
+                                        Text("VERIFIED")
+                                    }
+                                    .font(vm.appFont(size: 9, weight: .black))
+                                    .kerning(1)
+                                    .foregroundStyle(.green)
+                                }
+                            }
+                            HStack {
+                                SecureField("AIza...", text: $bookVM.draftKey)
+                                    .textFieldStyle(.roundedBorder)
+                                    .font(vm.appFont(size: 13).monospaced())
+                                Button {
+                                    bookVM.verifyAndSaveKey()
+                                } label: {
+                                    if bookVM.verifyingKey {
+                                        ProgressView().scaleEffect(0.6).frame(width: 60)
+                                    } else {
+                                        Text("Verify").frame(width: 60)
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.cyan)
+                                .disabled(bookVM.draftKey.trimmingCharacters(in: .whitespaces).isEmpty || bookVM.verifyingKey)
+                            }
+                            HStack {
+                                Link("Get a key from ai.google.dev",
+                                     destination: URL(string: "https://ai.google.dev")!)
+                                    .font(vm.appFont(size: 11))
+                                    .foregroundStyle(.cyan)
+                                Spacer()
+                                if bookVM.hasStoredKey {
+                                    Button("Remove") { bookVM.removeKey() }
+                                        .buttonStyle(.plain)
+                                        .font(vm.appFont(size: 11))
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                        }
+
+                        Divider()
+
+                        HStack {
+                            Label("Default Voice", systemImage: "person.wave.2")
+                                .font(vm.appFont(size: 14))
+                            Spacer()
+                            Picker("", selection: $bookVM.defaultBookVoice) {
+                                ForEach(vm.availableVoices, id: \.id) { voice in
+                                    Text(voice.display).tag(voice.id)
+                                }
+                            }
+                            .frame(width: 150)
+                            .labelsHidden()
+                        }
+
+                        Text("Audiobook generation uses this voice. Clipboard TTS continues to use the live 'Active Voice' above.")
+                            .font(vm.appFont(size: 11))
+                            .foregroundStyle(.secondary)
+
+                        Divider()
+
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Label("Default Speed", systemImage: "gauge.with.needle")
+                                    .font(vm.appFont(size: 14))
+                                Spacer()
+                                Text(String(format: "%.2fx", bookVM.defaultBookSpeed))
+                                    .font(vm.appFont(size: 14, weight: .bold).monospaced())
+                                    .foregroundStyle(.cyan)
+                            }
+                            Slider(value: $bookVM.defaultBookSpeed, in: 0.75...2.0).tint(.cyan)
+                        }
+
+                        Text("Audiobooks use your selected TTS engine and voice from above. Each PDF is cleaned via Gemini before narration to handle tables, equations, and PDF formatting artifacts.")
+                            .font(vm.appFont(size: 11))
+                            .foregroundStyle(.secondary)
                     }
                 }
 
