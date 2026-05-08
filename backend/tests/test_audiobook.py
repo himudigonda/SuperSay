@@ -36,9 +36,7 @@ def isolated_audiobooks_dir(monkeypatch):
         def AUDIOBOOKS_DIR(self) -> str:
             return tmp
 
-    monkeypatch.setattr(
-        "app.services.audiobook_store.settings", _PatchedSettings()
-    )
+    monkeypatch.setattr("app.services.audiobook_store.settings", _PatchedSettings())
     AudiobookStore._reset_for_tests()
     yield tmp
     AudiobookStore._reset_for_tests()
@@ -360,7 +358,10 @@ async def test_audio_range_request_returns_206_with_correct_slice():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     # Create a known-content audio.wav.
     audio_path = AudiobookStore.audio_path(bid)
@@ -382,7 +383,10 @@ def test_audio_no_range_returns_full_file_with_accept_ranges_header():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     payload = b"hello-wav-bytes"
     with open(AudiobookStore.audio_path(bid), "wb") as f:
@@ -401,7 +405,10 @@ def test_audio_range_invalid_returns_416():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     with open(AudiobookStore.audio_path(bid), "wb") as f:
         f.write(b"x" * 100)
@@ -426,7 +433,10 @@ def test_cancel_endpoint_404_for_unknown_book():
 def test_cancel_sets_flag():
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     assert AudiobookService.cancel(bid) is True
     assert AudiobookService._cancel_flags.get(bid) is True
@@ -442,7 +452,10 @@ def test_transcript_endpoint_404_when_missing():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     response = client.get(f"/audiobook/{bid}/transcript")
     assert response.status_code == 404
@@ -456,7 +469,10 @@ def test_transcript_endpoint_serves_file():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     payload = {"book_id": bid, "sections": []}
     with open(AudiobookStore.transcript_path(bid), "w") as f:
@@ -497,7 +513,9 @@ async def test_retry_failed_clears_pages_and_enqueues(monkeypatch):
     async def fake_enqueue(book_id: str, api_key: str):
         enqueued.append(book_id)
 
-    monkeypatch.setattr(AudiobookService, "enqueue", classmethod(lambda cls, b, k: fake_enqueue(b, k)))
+    monkeypatch.setattr(
+        AudiobookService, "enqueue", classmethod(lambda cls, b, k: fake_enqueue(b, k))
+    )
 
     count = await AudiobookService.retry_failed(bid, "fake-key")
     assert count == 2
@@ -521,7 +539,10 @@ def test_retry_endpoint_requires_api_key():
     client = TestClient(app)
     bid = AudiobookStore.create_book("Test.pdf")
     AudiobookStore.write_meta(
-        bid, AudiobookStore.initial_meta(bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0})
+        bid,
+        AudiobookStore.initial_meta(
+            bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+        ),
     )
     response = client.post(f"/audiobook/{bid}/retry")
     assert response.status_code == 400
@@ -633,13 +654,13 @@ async def test_gemini_clean_page_retries_then_succeeds(monkeypatch):
 
     calls = {"n": 0}
 
-    def flaky_sync(api_key, raw):
+    async def flaky_async(api_key, raw):
         calls["n"] += 1
         if calls["n"] < 2:
             raise GeminiBadResponseError("transient")
         return "cleaned text"
 
-    monkeypatch.setattr(GeminiCleaner, "_sync_clean", staticmethod(flaky_sync))
+    monkeypatch.setattr(GeminiCleaner, "_async_clean", AsyncMock(side_effect=flaky_async))
     monkeypatch.setattr("asyncio.sleep", AsyncMock(return_value=None))
     out = await GeminiCleaner.clean_page("k", "raw")
     assert out == "cleaned text"
@@ -652,11 +673,11 @@ async def test_gemini_auth_error_does_not_retry(monkeypatch):
 
     calls = {"n": 0}
 
-    def auth_failing(api_key, raw):
+    async def auth_failing(api_key, raw):
         calls["n"] += 1
         raise GeminiAuthError("bad key")
 
-    monkeypatch.setattr(GeminiCleaner, "_sync_clean", staticmethod(auth_failing))
+    monkeypatch.setattr(GeminiCleaner, "_async_clean", AsyncMock(side_effect=auth_failing))
     monkeypatch.setattr("asyncio.sleep", AsyncMock(return_value=None))
     with pytest.raises(GeminiAuthError):
         await GeminiCleaner.clean_page("k", "raw")
@@ -677,9 +698,15 @@ def test_upload_endpoint_happy_path(monkeypatch):
     from app.services import pdf_extractor as _pe
 
     monkeypatch.setattr(_pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 3))
-    monkeypatch.setattr(_pe.PDFExtractor, "is_image_only", classmethod(lambda cls, p: False))
-    monkeypatch.setattr(_pe.PDFExtractor, "sample_word_count", classmethod(lambda cls, p: 50))
-    monkeypatch.setattr(_pe.PDFExtractor, "sample_char_count", classmethod(lambda cls, p: 250))
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "is_image_only", classmethod(lambda cls, p: False)
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "sample_word_count", classmethod(lambda cls, p: 50)
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "sample_char_count", classmethod(lambda cls, p: 250)
+    )
     rendered: list[str] = []
     monkeypatch.setattr(
         _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b: rendered.append(b))
@@ -713,7 +740,9 @@ def test_upload_rejects_empty_pdf():
     from fastapi.testclient import TestClient
 
     client = TestClient(app)
-    response = client.post("/audiobook", files={"file": ("empty.pdf", b"", "application/pdf")})
+    response = client.post(
+        "/audiobook", files={"file": ("empty.pdf", b"", "application/pdf")}
+    )
     assert response.status_code == 400
     assert "empty" in response.json()["detail"].lower()
 
@@ -728,19 +757,29 @@ def test_upload_rejects_non_pdf_filename():
     assert response.status_code == 400
 
 
-def test_upload_rejects_image_only_pdf(monkeypatch):
+def test_upload_accepts_image_only_pdf(monkeypatch):
+    """Image-only PDFs are now accepted; OCR handles them during the clean phase.
+    The response should return is_image_only=True so the UI can show an OCR badge."""
     from app.main import app
     from fastapi.testclient import TestClient
     from app.services import pdf_extractor as _pe
 
     monkeypatch.setattr(_pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 1))
-    monkeypatch.setattr(_pe.PDFExtractor, "is_image_only", classmethod(lambda cls, p: True))
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "is_image_only", classmethod(lambda cls, p: True)
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "render_cover", classmethod(lambda cls, bid, **kw: None)
+    )
 
     client = TestClient(app)
     files = {"file": ("scan.pdf", b"%PDF-1.4\n" + b"x" * 200, "application/pdf")}
     response = client.post("/audiobook", files=files)
-    assert response.status_code == 422
-    assert "OCR" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_image_only"] is True
+    # Cost estimate uses the per-page OCR default (not zero).
+    assert body["estimated_cost_usd"] > 0
 
 
 def test_estimate_response_includes_cost_warning(monkeypatch):
@@ -756,3 +795,52 @@ def test_estimate_response_includes_cost_warning(monkeypatch):
         page_count=2500, sample_words=600, sample_chars=8000, speed=1.0
     )
     assert big["cost_usd"] > 1.0
+
+
+# ---------- OCR fallback in clean phase ----------
+
+
+@pytest.mark.asyncio
+async def test_clean_phase_uses_ocr_for_image_pages(monkeypatch):
+    """Pages with fewer than 50 chars of extracted text are routed to
+    GeminiCleaner.ocr_page instead of clean_page."""
+    from app.services import audiobook_service as _svc
+    from app.services import pdf_extractor as _pe
+
+    bid = AudiobookStore.create_book("Scan.pdf")
+    meta = AudiobookStore.initial_meta(
+        bid, "Scan.pdf", 2, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+    )
+    AudiobookStore.write_meta(bid, meta)
+    AudiobookStore.save_pdf(bid, b"%PDF-1.4\n" + b"x" * 200)
+
+    # Page 1: minimal text (image page) — should trigger OCR.
+    # Page 2: normal text — should use clean_page.
+    for n, content in [(1, ""), (2, "x" * 200)]:
+        path = AudiobookStore.page_raw_path(bid, n)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(content)
+
+    ocr_calls: list[int] = []
+    clean_calls: list[int] = []
+
+    async def _fake_ocr(api_key, image_bytes):
+        ocr_calls.append(1)
+        return "OCR result."
+
+    async def _fake_clean(api_key, text):
+        clean_calls.append(1)
+        return "Cleaned text."
+
+    monkeypatch.setattr(_pe.PDFExtractor, "render_page_image", classmethod(lambda cls, p, n, **kw: b"imgbytes"))
+
+    from app.services import gemini_cleaner as _gc
+    monkeypatch.setattr(_gc.GeminiCleaner, "ocr_page", AsyncMock(side_effect=_fake_ocr))
+    monkeypatch.setattr(_gc.GeminiCleaner, "clean_page", AsyncMock(side_effect=_fake_clean))
+
+    _svc.AudiobookService.initialize()
+    await _svc.AudiobookService._phase_clean(bid, api_key="test-key")
+
+    assert len(ocr_calls) == 1, "image page should route to OCR"
+    assert len(clean_calls) == 1, "text page should route to clean_page"

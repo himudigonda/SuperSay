@@ -19,7 +19,7 @@ import os
 import struct
 import time
 import wave
-from typing import Any, AsyncGenerator
+from typing import Any
 
 import numpy as np
 from app.services.audiobook_store import AudiobookStore, _now_iso
@@ -27,6 +27,10 @@ from app.services.engine_manager import EngineManager
 from app.services.gemini_cleaner import GeminiAuthError, GeminiCleaner
 from app.services.pdf_extractor import PDFExtractor
 from app.services.tts import interactive_tts_lock
+
+# Pages with fewer extractable chars than this are treated as image-only
+# and routed through Gemini vision OCR instead of text cleaning.
+_OCR_TEXT_THRESHOLD = 50
 
 SAMPLE_RATE = 24000  # matches TTSEngine
 BYTES_PER_SAMPLE = 2  # int16
@@ -72,9 +76,7 @@ class AudiobookService:
                 await cls._run_pipeline(book_id)
             except Exception as e:
                 print(f"[Audiobook] Fatal pipeline error for {book_id}: {e}")
-                await AudiobookStore.update_meta(
-                    book_id, status="failed", error=str(e)
-                )
+                await AudiobookStore.update_meta(book_id, status="failed", error=str(e))
                 cls._emit(book_id, "failed", error=str(e))
             finally:
                 cls._current_book_id = None
@@ -108,7 +110,12 @@ class AudiobookService:
         if meta is None:
             return False
         return meta.get("status") in {
-            "queued", "extracting", "cleaning", "sectioning", "tts", "concatenating"
+            "queued",
+            "extracting",
+            "cleaning",
+            "sectioning",
+            "tts",
+            "concatenating",
         }
 
     @classmethod
@@ -313,7 +320,9 @@ class AudiobookService:
                 book_id,
                 phase_progress={"page_done": n, "page_total": page_count},
             )
-            cls._emit(book_id, "page_done", phase="extracting", page=n, total=page_count)
+            cls._emit(
+                book_id, "page_done", phase="extracting", page=n, total=page_count
+            )
 
         cls._emit(book_id, "phase_finished", phase="extracting")
 
@@ -381,7 +390,11 @@ class AudiobookService:
 
         if not sections:
             sections = [
-                {"title": meta.get("title") or "Audiobook", "start_page": 1, "end_page": page_count}
+                {
+                    "title": meta.get("title") or "Audiobook",
+                    "start_page": 1,
+                    "end_page": page_count,
+                }
             ]
 
         # start_time gets filled in concat phase. Persist now so UI can show titles
@@ -431,7 +444,18 @@ class AudiobookService:
                     raw_text = f.read()
 
                 try:
-                    cleaned = await GeminiCleaner.clean_page(api_key, raw_text)
+                    if len(raw_text.strip()) < _OCR_TEXT_THRESHOLD:
+                        # Image page — render and OCR+clean via Gemini vision.
+                        pdf_path = AudiobookStore.pdf_path(book_id)
+                        image_bytes = await asyncio.get_running_loop().run_in_executor(
+                            cls._executor,
+                            PDFExtractor.render_page_image,
+                            pdf_path,
+                            n,
+                        )
+                        cleaned = await GeminiCleaner.ocr_page(api_key, image_bytes)
+                    else:
+                        cleaned = await GeminiCleaner.clean_page(api_key, raw_text)
                 except GeminiAuthError:
                     raise
                 except Exception as e:
@@ -523,9 +547,7 @@ class AudiobookService:
                     print(f"[Audiobook] {book_id} page {n} tts failed: {e}")
                     failed.append(n)
                     await AudiobookStore.update_meta(book_id, failed_pages=failed)
-                    cls._emit(
-                        book_id, "page_failed", phase="tts", page=n, error=str(e)
-                    )
+                    cls._emit(book_id, "page_failed", phase="tts", page=n, error=str(e))
                     cls._write_silence_wav(out_path, 0.5)
 
             EngineManager.touch()

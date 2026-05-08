@@ -161,6 +161,18 @@ class PDFExtractor:
         pil_img.save(buf, format="JPEG", quality=85, optimize=True)
         cls._atomic_write_bytes(out, buf.getvalue())
 
+    @classmethod
+    def render_page_image(cls, pdf_path: str, page_num: int, resolution: int = 200) -> bytes:
+        """Render a single page (1-indexed) to JPEG bytes for Gemini OCR."""
+        with pdfplumber.open(pdf_path) as pdf:
+            page = pdf.pages[page_num - 1]
+            pil_img = page.to_image(resolution=resolution).original
+        if pil_img.mode != "RGB":
+            pil_img = pil_img.convert("RGB")
+        buf = io.BytesIO()
+        pil_img.save(buf, format="JPEG", quality=85)
+        return buf.getvalue()
+
     # ---------- atomic helpers ----------
 
     @staticmethod

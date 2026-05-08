@@ -1,4 +1,4 @@
-"""GeminiCleaner — strict text-cleaning via Gemini 1.5 Flash.
+"""GeminiCleaner — text-cleaning and OCR via Gemini 1.5 Flash (google.genai SDK).
 
 The user's API key is sent per-request (X-Gemini-Api-Key header from Swift).
 Never persisted on disk.
@@ -8,7 +8,8 @@ import asyncio
 import json
 import re
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 # Pricing constants (Gemini 1.5 Flash, May 2026). Update if rates change.
 INPUT_USD_PER_M_TOKENS = 0.075
@@ -44,6 +45,27 @@ If the input page is empty or contains no readable content, output the single
 character "-".
 """
 
+OCR_AND_CLEAN_PROMPT = """\
+You are a combined OCR and text-cleaning assistant preparing a scanned PDF page
+for text-to-speech narration. Your output will be read aloud verbatim.
+
+STEP 1 — OCR: Extract all visible text from the provided page image exactly as
+it appears. Include all words, numbers, punctuation, and sentence structure.
+
+STEP 2 — CLEAN: Apply these rules to the extracted text:
+1. Preserve every meaningful word. Do not summarize, paraphrase, or omit content.
+2. Remove only: page numbers, running headers/footers, hyphenation artifacts
+   (e.g., "exam-\\nple" -> "example"), and PDF extraction noise.
+3. Reflow into natural paragraphs; join broken lines belonging to the same sentence.
+4. Tables: prefix first row with "The following is a table." Convert each row to
+   a sentence. End with "End of table.".
+5. Equations: read aloud naturally (e.g., "x squared plus y squared equals z squared").
+6. Bullet lists: convert to "First, ... Second, ..." with periods.
+
+Output ONLY the cleaned narration text. No preamble, no commentary, no markdown.
+If the page is blank or unreadable, output the single character "-".
+"""
+
 
 class GeminiAuthError(Exception):
     """Invalid API key."""
@@ -61,6 +83,19 @@ class GeminiCleaner:
     _MAX_RETRIES = 3
     _BACKOFF_BASE = 2.0  # 2s, 4s, 8s
 
+    # ---------- error classification ----------
+
+    @staticmethod
+    def _reraise_typed(e: Exception) -> None:
+        msg = str(e).lower()
+        if any(k in msg for k in ("api_key", "api key", "permission", "unauthorized", "401", "credentials", "invalid")):
+            raise GeminiAuthError(str(e)) from e
+        if any(k in msg for k in ("429", "rate limit", "quota", "resource_exhausted")):
+            raise GeminiRateLimitError(str(e)) from e
+        raise GeminiBadResponseError(str(e)) from e
+
+    # ---------- text cleaning ----------
+
     @classmethod
     async def clean_page(cls, api_key: str, raw_text: str) -> str:
         """Strict-clean a single page. Retries on transient errors."""
@@ -70,9 +105,8 @@ class GeminiCleaner:
         last_exc: Exception | None = None
         for attempt in range(cls._MAX_RETRIES):
             try:
-                return await asyncio.to_thread(cls._sync_clean, api_key, raw_text)
+                return await cls._async_clean(api_key, raw_text)
             except GeminiAuthError:
-                # Auth errors don't retry — fail fast.
                 raise
             except (GeminiRateLimitError, GeminiBadResponseError) as e:
                 last_exc = e
@@ -86,39 +120,60 @@ class GeminiCleaner:
         raise last_exc or GeminiBadResponseError("unknown error")
 
     @classmethod
-    def _sync_clean(cls, api_key: str, raw_text: str) -> str:
-        """Single synchronous Gemini call. Raises typed exceptions."""
+    async def _async_clean(cls, api_key: str, raw_text: str) -> str:
+        client = genai.Client(api_key=api_key)
+        config = types.GenerateContentConfig(
+            system_instruction=GEMINI_CLEAN_SYSTEM_PROMPT,
+            temperature=0.1,
+        )
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel(
-                MODEL_NAME, system_instruction=GEMINI_CLEAN_SYSTEM_PROMPT
-            )
-            resp = model.generate_content(
-                raw_text,
-                generation_config={"temperature": 0.1},
+            resp = await client.aio.models.generate_content(
+                model=MODEL_NAME,
+                config=config,
+                contents=raw_text,
             )
         except Exception as e:
-            msg = str(e).lower()
-            if (
-                "api_key" in msg
-                or "api key" in msg
-                or "permission" in msg
-                or "unauthorized" in msg
-                or "401" in msg
-            ):
-                raise GeminiAuthError(str(e)) from e
-            if "429" in msg or "rate" in msg or "quota" in msg:
-                raise GeminiRateLimitError(str(e)) from e
-            raise GeminiBadResponseError(str(e)) from e
+            cls._reraise_typed(e)
+        text = (resp.text or "").strip()
+        return text if text else "-"
 
+    # ---------- OCR (image pages) ----------
+
+    @classmethod
+    async def ocr_page(cls, api_key: str, image_bytes: bytes) -> str:
+        """OCR + clean a scanned page image via Gemini vision. Retries on transient errors."""
+        last_exc: Exception | None = None
+        for attempt in range(cls._MAX_RETRIES):
+            try:
+                return await cls._async_ocr(api_key, image_bytes)
+            except GeminiAuthError:
+                raise
+            except (GeminiRateLimitError, GeminiBadResponseError) as e:
+                last_exc = e
+                if attempt < cls._MAX_RETRIES - 1:
+                    await asyncio.sleep(cls._BACKOFF_BASE * (2**attempt))
+            except Exception as e:
+                last_exc = e
+                if attempt < cls._MAX_RETRIES - 1:
+                    await asyncio.sleep(cls._BACKOFF_BASE * (2**attempt))
+
+        raise last_exc or GeminiBadResponseError("ocr: unknown error")
+
+    @classmethod
+    async def _async_ocr(cls, api_key: str, image_bytes: bytes) -> str:
+        client = genai.Client(api_key=api_key)
+        config = types.GenerateContentConfig(temperature=0.1)
+        image_part = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
         try:
-            text = (resp.text or "").strip()
+            resp = await client.aio.models.generate_content(
+                model=MODEL_NAME,
+                config=config,
+                contents=[image_part, OCR_AND_CLEAN_PROMPT],
+            )
         except Exception as e:
-            raise GeminiBadResponseError(str(e)) from e
-
-        if not text:
-            return "-"
-        return text
+            cls._reraise_typed(e)
+        text = (resp.text or "").strip()
+        return text if text else "-"
 
     # ---------- cost / token estimation ----------
 
@@ -149,28 +204,21 @@ class GeminiCleaner:
         "- Do not invent content. Use only what is in the text."
     )
 
-    # Conservative chunk size in characters (Gemini-1.5-flash 1M token window
-    # is generous, but we cap to keep latency and JSON parsing manageable).
     _SECTION_CHUNK_CHARS = 500_000
     _SECTION_CHUNK_PAGE_OVERLAP = 5
 
     @classmethod
-    async def detect_sections(
-        cls, api_key: str, pages: list[str]
-    ) -> list[dict]:
+    async def detect_sections(cls, api_key: str, pages: list[str]) -> list[dict]:
         """Identify sections from a list of cleaned pages.
 
         `pages` is 1-indexed (pages[0] is page 1). Returns a list of
         {"title": str, "start_page": int, "end_page": int} sorted by start_page,
-        contiguous and non-overlapping. Returns [] on total failure (caller can
-        fall back to a single implicit section).
+        contiguous and non-overlapping. Returns [] on total failure.
         """
         if not pages:
             return []
 
-        # Build chunks of (page_offset, joined_text). Each chunk is sent as one
-        # LLM call; results are stitched together.
-        chunks: list[tuple[int, str]] = []  # (first_page_in_chunk, text)
+        chunks: list[tuple[int, str]] = []
         cur_pages: list[str] = []
         cur_chars = 0
         cur_start = 1
@@ -178,8 +226,6 @@ class GeminiCleaner:
             block = f"=== PAGE {i} ===\n{p}\n"
             if cur_chars + len(block) > cls._SECTION_CHUNK_CHARS and cur_pages:
                 chunks.append((cur_start, "".join(cur_pages)))
-                # overlap: keep last few pages so chapter titles split across
-                # chunk boundaries are still resolvable
                 tail = cur_pages[-cls._SECTION_CHUNK_PAGE_OVERLAP:]
                 cur_pages = list(tail)
                 cur_start = i - len(tail) + 1
@@ -192,11 +238,8 @@ class GeminiCleaner:
         all_sections: list[dict] = []
         for first_page, text in chunks:
             try:
-                resp_text = await asyncio.to_thread(
-                    cls._sync_section_call, api_key, text
-                )
+                resp_text = await cls._async_section_call(api_key, text)
                 parsed = cls._parse_sections_json(resp_text, max_page=len(pages))
-                # Drop sections that begin before this chunk's first page (overlap noise)
                 parsed = [s for s in parsed if s["start_page"] >= first_page]
                 all_sections.extend(parsed)
             except Exception as e:
@@ -206,24 +249,26 @@ class GeminiCleaner:
         return cls._stitch_sections(all_sections, page_count=len(pages))
 
     @classmethod
-    def _sync_section_call(cls, api_key: str, joined_text: str) -> str:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            MODEL_NAME, system_instruction=cls.SECTION_PROMPT
+    async def _async_section_call(cls, api_key: str, joined_text: str) -> str:
+        client = genai.Client(api_key=api_key)
+        config = types.GenerateContentConfig(
+            system_instruction=cls.SECTION_PROMPT,
+            temperature=0.1,
+            response_mime_type="application/json",
         )
-        resp = model.generate_content(
-            joined_text,
-            generation_config={
-                "temperature": 0.1,
-                "response_mime_type": "application/json",
-            },
-        )
+        try:
+            resp = await client.aio.models.generate_content(
+                model=MODEL_NAME,
+                config=config,
+                contents=joined_text,
+            )
+        except Exception as e:
+            cls._reraise_typed(e)
         return resp.text or ""
 
     @staticmethod
     def _parse_sections_json(raw: str, max_page: int) -> list[dict]:
-        """Parse Gemini's JSON output into a clean list. Tolerant to wrapping markdown."""
-        # Strip ```json fences if present.
+        """Parse Gemini's JSON output into a clean list. Tolerant to markdown fences."""
         s = raw.strip()
         s = re.sub(r"^```(?:json)?\s*", "", s)
         s = re.sub(r"\s*```$", "", s)
@@ -257,7 +302,6 @@ class GeminiCleaner:
         if not sections:
             return []
 
-        # Sort + dedupe identical entries.
         seen: set[tuple] = set()
         unique: list[dict] = []
         for s in sorted(sections, key=lambda x: (x["start_page"], x["end_page"])):
@@ -267,9 +311,6 @@ class GeminiCleaner:
             seen.add(key)
             unique.append(s)
 
-        # Force contiguity: each section's end_page = next section's start_page - 1
-        # (or page_count for the last). Drop sections whose start_page <= the
-        # previous section's start_page (they were merge duplicates).
         cleaned: list[dict] = []
         for s in unique:
             if cleaned and s["start_page"] <= cleaned[-1]["start_page"]:
@@ -281,11 +322,14 @@ class GeminiCleaner:
             else:
                 s["end_page"] = page_count
 
-        # Ensure first section starts at page 1.
         if cleaned and cleaned[0]["start_page"] > 1:
             cleaned.insert(
                 0,
-                {"title": "Front Matter", "start_page": 1, "end_page": cleaned[0]["start_page"] - 1},
+                {
+                    "title": "Front Matter",
+                    "start_page": 1,
+                    "end_page": cleaned[0]["start_page"] - 1,
+                },
             )
         return cleaned
 
@@ -293,10 +337,9 @@ class GeminiCleaner:
     async def verify_key(cls, api_key: str) -> bool:
         """Lightweight key check: tiny generation. Returns True if key works."""
         try:
-            await asyncio.to_thread(cls._sync_clean, api_key, "Say 'ok'.")
+            await cls.clean_page(api_key, "Say 'ok'.")
             return True
         except GeminiAuthError:
             return False
         except Exception:
-            # Other errors (network, rate limit) → treat as not-verified for safety.
             return False

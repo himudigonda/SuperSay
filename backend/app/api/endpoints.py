@@ -192,7 +192,9 @@ async def upload_audiobook(
         raise HTTPException(status_code=400, detail="The uploaded PDF is empty.")
     if len(content) < 100:
         # A real PDF starts with '%PDF-' and has at least a header + xref.
-        raise HTTPException(status_code=400, detail="The uploaded file is too small to be a valid PDF.")
+        raise HTTPException(
+            status_code=400, detail="The uploaded file is too small to be a valid PDF."
+        )
     title = file.filename or "Untitled.pdf"
 
     book_id = AudiobookStore.create_book(title)
@@ -210,19 +212,20 @@ async def upload_audiobook(
         AudiobookStore.delete_book(book_id)
         raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}") from e
 
+    # Image-only books are processed via Gemini vision OCR — no rejection.
+    # Substitute a per-page character estimate for the cost/duration calculation
+    # since text extraction returns nothing useful for scanned pages.
+    _OCR_CHARS_PER_PAGE = 1500  # ~250 words × 6 chars/word
     if is_image_only:
-        AudiobookStore.delete_book(book_id)
-        raise HTTPException(
-            status_code=422,
-            detail="This PDF appears to contain only images. OCR is not yet supported.",
+        sample_words = 250
+        sample_chars = _OCR_CHARS_PER_PAGE
+    else:
+        sample_words = await loop.run_in_executor(
+            None, PDFExtractor.sample_word_count, pdf_path
         )
-
-    sample_words = await loop.run_in_executor(
-        None, PDFExtractor.sample_word_count, pdf_path
-    )
-    sample_chars = await loop.run_in_executor(
-        None, PDFExtractor.sample_char_count, pdf_path
-    )
+        sample_chars = await loop.run_in_executor(
+            None, PDFExtractor.sample_char_count, pdf_path
+        )
 
     # Render cover in background — UI fetches /audiobook/{id}/cover when ready.
     async def _bg_render_cover() -> None:
@@ -244,7 +247,9 @@ async def upload_audiobook(
 
     state = EngineManager.state()
     book_engine = engine or state.get("engine", "kokoro")
-    default_voice = state.get("voices", ["af_bella"])[0] if state.get("voices") else "af_bella"
+    default_voice = (
+        state.get("voices", ["af_bella"])[0] if state.get("voices") else "af_bella"
+    )
     book_voice = voice or default_voice
 
     meta = AudiobookStore.initial_meta(
@@ -268,7 +273,7 @@ async def upload_audiobook(
         estimated_processing_seconds=estimate["processing_seconds"],
         estimated_audio_seconds=estimate["audio_seconds"],
         estimated_cost_usd=estimate["cost_usd"],
-        is_image_only=False,
+        is_image_only=is_image_only,
     )
 
 
@@ -354,7 +359,9 @@ def get_audiobook_audio(
         if start < 0 or end >= file_size or start > end:
             raise ValueError
     except ValueError:
-        return Response(status_code=416, headers={"Content-Range": f"bytes */{file_size}"})
+        return Response(
+            status_code=416, headers={"Content-Range": f"bytes */{file_size}"}
+        )
 
     chunk_size = 1 << 16  # 64 KB per yield
 

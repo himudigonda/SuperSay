@@ -81,8 +81,7 @@ class AudiobookStore:
 
     @classmethod
     def _init_schema(cls, conn: sqlite3.Connection) -> None:
-        conn.execute(
-            """
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS books (
                 book_id TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -95,8 +94,7 @@ class AudiobookStore:
                 speed REAL NOT NULL DEFAULT 1.0,
                 meta_json TEXT NOT NULL
             )
-            """
-        )
+            """)
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_books_created_at ON books(created_at DESC)"
         )
