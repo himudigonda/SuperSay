@@ -1,12 +1,14 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SuperSayWindow: View {
     @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var history: HistoryManager
     @EnvironmentObject var launchManager: LaunchManager
+    @EnvironmentObject var bookVM: AudiobookViewModel
     @Environment(\.colorScheme) var colorScheme
-    // @State private var selectedTab: String? = "home" // Managed by VM now
+    @State private var globalDropHovering = false
 
     var body: some View {
         NavigationSplitView {
@@ -36,13 +38,38 @@ struct SuperSayWindow: View {
                             Label("Now Playing", systemImage: "play.circle.fill")
                                 .font(vm.appFont(size: 13))
                         }
-                        NavigationLink(value: "library") {
-                            Label("Audiobooks", systemImage: "book.closed.fill")
-                                .font(vm.appFont(size: 13))
-                        }
                         NavigationLink(value: "history") {
                             Label("The Vault", systemImage: "clock.arrow.circlepath")
                                 .font(vm.appFont(size: 13))
+                        }
+                    }
+                    Section(header: Text("Audiobooks").font(vm.appFont(size: 11, weight: .bold))) {
+                        NavigationLink(value: "books") {
+                            Label("Library", systemImage: "books.vertical.fill")
+                                .font(vm.appFont(size: 13))
+                        }
+                        if let resume = bookVM.continueListeningBook {
+                            Button {
+                                vm.selectedTab = "books"
+                                bookVM.play(resume)
+                                bookVM.openPlayer(for: resume.bookID)
+                            } label: {
+                                HStack {
+                                    Image(systemName: "play.circle")
+                                        .foregroundStyle(.cyan)
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text("Continue Listening")
+                                            .font(vm.appFont(size: 13))
+                                        Text(prettyTitleForResume(resume.title))
+                                            .font(vm.appFont(size: 10))
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(1)
+                                    }
+                                    Spacer()
+                                }
+                                .padding(.vertical, 4)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
                 }
@@ -122,14 +149,42 @@ struct SuperSayWindow: View {
                 // MAIN CONTENT
                 detailContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .onDrop(of: [.fileURL], isTargeted: $globalDropHovering, perform: handleGlobalPDFDrop)
+
+                // Global drop overlay shown across any non-Audiobooks tab when a PDF is hovering.
+                if globalDropHovering && vm.selectedTab != "books" {
+                    globalDropOverlay
+                        .transition(.opacity)
+                }
 
                 // FLOATING MINI PLAYER (Global) - Hide when on main dashboard to avoid duplicate bars
                 if vm.status == .speaking || vm.status == .paused, vm.selectedTab != "home" {
                     miniPlayerHUD
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
+
+                // Audiobook now-playing bar — hidden when on the player view (`books` tab when book is open)
+                if let playing = bookVM.nowPlaying {
+                    NowPlayingBar(onTap: {
+                        vm.selectedTab = "books"
+                        bookVM.openPlayer(for: playing.bookID)
+                    })
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .environmentObject(vm)
+                        .environmentObject(bookVM)
+                }
+
+                // Toast / banner — top of detail pane.
+                VStack {
+                    AudiobookToastView()
+                        .environmentObject(vm)
+                        .environmentObject(bookVM)
+                    Spacer()
+                }
+                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: bookVM.toast?.id)
             }
             .background(adaptiveBackdrop)
+            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: bookVM.nowPlaying?.bookID)
         }
         .frame(minWidth: 800, minHeight: 600)
         .preferredColorScheme(vm.appTheme == "system" ? nil : (vm.appTheme == "dark" ? .dark : .light))
@@ -179,8 +234,8 @@ struct SuperSayWindow: View {
     private var detailContent: some View {
         switch vm.selectedTab {
         case "home": MainDashboardView()
-        case "library": LibraryView()
         case "history": VaultView()
+        case "books": AudiobookLibraryView()
         case "preferences": PreferencesView()
         default: MainDashboardView()
         }
@@ -220,6 +275,62 @@ struct SuperSayWindow: View {
         .padding(20)
         .shadow(color: .black.opacity(0.1), radius: 10)
         .animation(.spring(), value: audio.progress)
+    }
+
+    private func prettyTitleForResume(_ title: String) -> String {
+        var t = title
+        if t.lowercased().hasSuffix(".pdf") { t = String(t.dropLast(4)) }
+        return t
+    }
+
+    private func handleGlobalPDFDrop(_ providers: [NSItemProvider]) -> Bool {
+        guard let provider = providers.first else { return false }
+        provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+            var url: URL?
+            if let data = item as? Data { url = URL(dataRepresentation: data, relativeTo: nil) }
+            else if let u = item as? URL { url = u }
+            guard let url, url.pathExtension.lowercased() == "pdf" else { return }
+            Task { @MainActor in
+                vm.selectedTab = "books"
+                let voice = bookVM.defaultBookVoice.isEmpty ? vm.selectedVoice : bookVM.defaultBookVoice
+                let speed = bookVM.defaultBookSpeed > 0 ? bookVM.defaultBookSpeed : vm.speechSpeed
+                bookVM.presentEstimate(
+                    for: url,
+                    voice: voice,
+                    speed: speed,
+                    engine: vm.ttsEngine
+                )
+            }
+        }
+        return true
+    }
+
+    private var globalDropOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.35).ignoresSafeArea()
+                .background(.ultraThinMaterial)
+            VStack(spacing: 22) {
+                Image(systemName: "arrow.down.doc.fill")
+                    .font(.system(size: 64, weight: .ultraLight))
+                    .foregroundStyle(.cyan)
+                Text("DROP TO ADD AUDIOBOOK")
+                    .font(vm.appFont(size: 13, weight: .black))
+                    .kerning(3)
+                    .foregroundStyle(.cyan)
+                Text("Will switch to Audiobooks and start an estimate.")
+                    .font(vm.appFont(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(40)
+            .background(.ultraThinMaterial)
+            .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(.cyan.opacity(0.6), style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+            )
+            .padding(60)
+        }
+        .animation(.easeInOut(duration: 0.2), value: globalDropHovering)
     }
 
     private var adaptiveBackdrop: some View {

@@ -1,3 +1,35 @@
+### 🚀 SuperSay v1.1.0 Changelog
+
+#### 📚 Audiobook Feature (New)
+*   **Full PDF-to-Audiobook Pipeline:** Upload any PDF → Gemini 1.5 Flash cleans text for narration → Kokoro/KittenTTS generates per-page audio → single WAV with chapter markers.
+*   **Audible-style Player:** Scrub bar, chapter list, sleep timer, live transcript panel, cover art with ambient gradient.
+*   **OCR for Scanned PDFs:** Image-only PDFs (previously rejected) are now processed via Gemini vision — pages with < 50 extractable chars are automatically OCR'd and cleaned in one Gemini call.
+*   **Resumability:** Each phase checkpoints to disk; interrupted books resume at the last completed page. Handles API key rotation via "needs_key" state.
+*   **Interactive TTS Preemption:** Pressing the hotkey mid-generation pauses audiobook at the next page boundary, runs TTS, then resumes — no conflicts.
+*   **SQLite Metadata:** Per-book meta.json replaced with a single WAL-mode SQLite DB; auto-migrates legacy files on startup.
+
+#### 🤖 AI Improvements
+*   **google.genai SDK (v2.0.0):** Migrated from deprecated `google-generativeai` to `google-genai`. All Gemini calls now use native async (`client.aio`) — no more `asyncio.to_thread` wrappers.
+*   **Section Detection:** Gemini identifies chapter/section boundaries from cleaned text; falls back to PDF outline bookmarks if present.
+
+#### 🏎️ TTS Engine
+*   **KittenTTS Integration:** Full multi-variant support (nano/micro/mini) with lookahead inference cache for sub-20ms cache-hit TTFA.
+*   **Engine Switching at Runtime:** Switch between Kokoro and KittenTTS without restart; active streams drain cleanly first.
+*   **CPU Fix:** Removed `allow_spinning=1` from ORT SessionOptions that caused 800-900% CPU idle load.
+
+#### 🖥️ macOS Frontend
+*   **NavigationStack Player:** Audiobook player opens as a navigation push (not sheet), keeping the sidebar visible and enabling keyboard shortcuts.
+*   **Preferences:** Gemini API key with live verification, default audiobook voice/speed, font selector.
+*   **NowPlayingBar:** Persistent mini-player for Continue Listening without opening the full player.
+*   **Smooth Preemption:** Audiobook playback fades out over 120ms when TTS hotkey fires (no click/pop).
+
+#### 📦 Build & Infrastructure
+*   **Version Bump:** 1.0.6 → **1.1.0**.
+*   **PyInstaller:** Updated to collect `google.genai`, `pdfplumber`, `pypdfium2`, `PIL`, `kittentts`.
+*   **81 Backend Tests:** Covers upload, OCR routing, resume, coordinated delete, range requests, SSE events, cost math.
+
+---
+
 ### 🚀 SuperSay v1.0.6 Changelog
 
 #### 🧠 Core Engine (Backend)

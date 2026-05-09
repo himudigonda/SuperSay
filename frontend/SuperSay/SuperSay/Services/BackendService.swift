@@ -5,6 +5,7 @@ import Foundation
 /// A thread-safe service to manage the Python backend process and handle streaming requests.
 final class BackendService: NSObject, @unchecked Sendable {
     private var process: Process?
+    private var processPipe: Pipe?
     private let stateQueue = DispatchQueue(label: "com.supersay.backend.state", qos: .userInitiated)
 
     // Thread-safe state managed by stateQueue
@@ -83,7 +84,10 @@ final class BackendService: NSObject, @unchecked Sendable {
 
         do {
             try p.run()
-            stateQueue.sync { self.process = p }
+            stateQueue.sync {
+                self.process = p
+                self.processPipe = pipe  // Store pipe reference for cleanup on stop
+            }
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
 
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -97,14 +101,22 @@ final class BackendService: NSObject, @unchecked Sendable {
 
     func stop() {
         stateQueue.sync {
+            // Close pipe readability handler to avoid file descriptor leak on restart
+            processPipe?.fileHandleForReading.readabilityHandler = nil
             process?.terminate()
             process = nil
+            processPipe = nil
         }
 
         let task = Process()
         task.launchPath = "/usr/bin/pkill"
         task.arguments = ["-9", "-f", "SuperSayServer"]
-        try? task.run()
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            // Silently ignore if pkill fails (process may not exist)
+        }
     }
 
     func exportLogs() {
@@ -132,20 +144,60 @@ final class BackendService: NSObject, @unchecked Sendable {
         NSWorkspace.shared.activateFileViewerSelecting([desktop])
     }
 
-    func checkHealth() async -> Bool {
-        let healthURL = baseURL.appendingPathComponent("health")
-        var request = URLRequest(url: healthURL)
+    struct HealthStatus {
+        let isOnline: Bool
+        let isModelLoaded: Bool
+
+        static let offline = HealthStatus(isOnline: false, isModelLoaded: false)
+    }
+
+    func checkHealth() async -> HealthStatus {
+        var request = URLRequest(url: baseURL.appendingPathComponent("health"))
         request.timeoutInterval = 3
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
-            let online = (response as? HTTPURLResponse)?.statusCode == 200
-            if online {
-                stateQueue.sync { _isLaunching = false }
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                return .offline
             }
-            return online
+            stateQueue.sync { _isLaunching = false }
+            let loaded = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["loaded"] as? Bool ?? false
+            return HealthStatus(isOnline: true, isModelLoaded: loaded)
         } catch {
-            return false
+            return .offline
         }
+    }
+
+    /// Fire-and-forget: ask the backend to reload the model and optionally pre-compute
+    /// the first audio segment for the given text (lookahead cache).
+    /// Returns immediately. Safe to call when model is already loaded.
+    func prewarm(text: String? = nil, voice: String? = nil, speed: Double? = nil) async {
+        var request = URLRequest(url: baseURL.appendingPathComponent("prewarm"))
+        request.httpMethod = "POST"
+        request.timeoutInterval = 2
+        if let text, let voice, let speed {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            let payload: [String: Any] = ["text": text, "voice": voice, "speed": speed]
+            request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        }
+        try? await URLSession.shared.data(for: request)
+    }
+
+    struct EngineInfo: Decodable {
+        let engine: String
+        let model: String
+        let voices: [String]
+    }
+
+    func switchEngine(engine: String, model: String?) async throws -> EngineInfo {
+        var request = URLRequest(url: baseURL.appendingPathComponent("engine"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 10
+        var payload: [String: Any] = ["engine": engine]
+        if let model { payload["model"] = model }
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+        let (data, _) = try await URLSession.shared.data(for: request)
+        return try JSONDecoder().decode(EngineInfo.self, from: data)
     }
 
     func streamAudio(text: String, voice: String, speed: Double, volume: Double) -> AsyncStream<Data> {
@@ -185,8 +237,9 @@ final class BackendService: NSObject, @unchecked Sendable {
 extension BackendService: URLSessionDataDelegate {
     func urlSession(_: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let id = dataTask.taskIdentifier
-        stateQueue.sync {
-            continuations[id]?.yield(data)
+        // Use async dispatch to avoid blocking the URLSession delegate queue
+        stateQueue.async {
+            self.continuations[id]?.yield(data)
         }
     }
 

@@ -30,8 +30,42 @@ class Settings(BaseSettings):
         return os.path.join(self.RESOURCE_PATH, "kokoro-v1.0.onnx")
 
     @property
+    def ACTIVE_MODEL_PATH(self) -> str:
+        """Returns INT8 quantized model if present, else falls back to FP32."""
+        int8_path = self.MODEL_PATH.replace(".onnx", "-int8.onnx")
+        if os.path.exists(int8_path):
+            print(f"[Config] Using INT8 quantized model: {int8_path}")
+            return int8_path
+        return self.MODEL_PATH
+
+    @property
     def VOICES_PATH(self) -> str:
         return os.path.join(self.RESOURCE_PATH, "voices-v1.0.bin")
+
+    def kitten_model_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS model ONNX file for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}.onnx")
+
+    def kitten_voices_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS voices file for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}-voices.npz")
+
+    def kitten_config_path(self, variant: str) -> str:
+        """Return the path to a KittenTTS config JSON for the given variant."""
+        return os.path.join(self.RESOURCE_PATH, f"kitten-{variant}-config.json")
+
+    @property
+    def USER_DATA_DIR(self) -> str:
+        """Writable user-data dir for audiobooks. Cleaned by `make nuke`."""
+        return os.path.expanduser(
+            "~/Library/Application Support/com.himudigonda.SuperSay"
+        )
+
+    @property
+    def AUDIOBOOKS_DIR(self) -> str:
+        path = os.path.join(self.USER_DATA_DIR, "audiobooks")
+        os.makedirs(path, exist_ok=True)
+        return path
 
 
 settings = Settings()

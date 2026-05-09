@@ -3,30 +3,32 @@ from unittest.mock import patch
 import numpy as np
 from app.main import app
 from app.services.audio import AudioService
-from app.services.tts import TTSEngine
+from app.services.engine_manager import EngineManager
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
 
 
-# Helper to mock the generator - MUST BE ASYNC NOW
-async def mock_tts_generator(*args, **kwargs):
+# Helper to mock the async generator
+async def mock_engine_generate(*args, **kwargs):
     # Yield small chunks to simulate stream
     yield np.zeros(12000, dtype=np.float32)
-    yield AudioService.generate_silence(0.2)
+    yield AudioService.get_silence(0.2)
     yield np.zeros(12000, dtype=np.float32)
 
 
-@patch.object(TTSEngine, "_model", object())  # Mock model loaded
-def test_health_check():
+@patch.object(EngineManager, "ensure_loaded")
+def test_health_check(mock_ensure):
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "model": "loaded"}
+    body = response.json()
+    assert "status" in body
+    assert "loaded" in body
 
 
-@patch.object(TTSEngine, "_model", object())
-@patch("app.services.tts.TTSEngine.generate", side_effect=mock_tts_generator)
-def test_speak_endpoint_streaming(mock_generate):
+@patch.object(EngineManager, "ensure_loaded")
+@patch.object(EngineManager, "generate", side_effect=mock_engine_generate)
+def test_speak_endpoint_streaming(mock_generate, mock_ensure):
     payload = {
         "text": "Test streaming",
         "voice": "af_bella",
@@ -48,3 +50,27 @@ def test_speak_endpoint_streaming(mock_generate):
     assert content[8:12] == b"WAVE"
     # Ensure we got data
     assert len(content) > 100
+
+
+@patch.object(EngineManager, "ensure_loaded")
+def test_engine_get_endpoint(mock_ensure):
+    """Test GET /engine returns current engine state."""
+    response = client.get("/engine")
+    assert response.status_code == 200
+    body = response.json()
+    assert "engine" in body
+    assert "model" in body
+    assert "voices" in body
+    assert isinstance(body["voices"], list)
+
+
+@patch.object(EngineManager, "switch")
+@patch.object(EngineManager, "ensure_loaded")
+def test_engine_post_endpoint(mock_ensure, mock_switch):
+    """Test POST /engine switches engines."""
+    payload = {"engine": "kitten", "model": "nano"}
+    response = client.post("/engine", json=payload)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "engine" in body
