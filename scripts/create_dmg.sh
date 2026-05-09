@@ -11,6 +11,17 @@ BUILD_DIR="build"
 XCODE_PROJECT_DIR="frontend/SuperSay"
 STAGING_DIR="${BUILD_DIR}/dmg-staging"
 
+# Locate Xcode: prefer full Xcode.app over CommandLineTools so xcodebuild works.
+if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
+    export DEVELOPER_DIR="/Applications/Xcode.app/Contents/Developer"
+elif [ -d "/Applications/Xcode-beta.app/Contents/Developer" ]; then
+    export DEVELOPER_DIR="/Applications/Xcode-beta.app/Contents/Developer"
+else
+    echo "⚠️  Full Xcode.app not found at /Applications/Xcode.app — trying system default."
+    echo "   If this fails, install Xcode from the App Store and re-run."
+fi
+
+echo "🔧 Using developer dir: ${DEVELOPER_DIR:-system default}"
 echo "🚀 Building SuperSay v${VERSION} Professional DMG..."
 
 # 1. Archive and Export App (Ensuring it's the Release build)

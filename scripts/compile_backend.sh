@@ -39,7 +39,6 @@ CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name
     --collect-all 'pypdfium2' \
     --collect-all 'pypdfium2_raw' \
     --collect-all 'google.genai' \
-    --collect-all 'google.ai' \
     --collect-all 'PIL' \
     --hidden-import 'uvicorn.loops.asyncio' \
     --hidden-import 'uvicorn.protocols.http.h11_impl' \
@@ -47,8 +46,6 @@ CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name
     --hidden-import 'starlette' \
     --hidden-import 'python_multipart' \
     --hidden-import 'multipart' \
-    --hidden-import 'google.api_core' \
-    --hidden-import 'google.auth' \
     --hidden-import 'google.genai.types' \
     --hidden-import 'pdfminer.layout' \
     --hidden-import 'pdfminer.high_level'"

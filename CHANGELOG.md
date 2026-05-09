@@ -1,3 +1,33 @@
+### 🚀 SuperSay v2.0 Changelog
+
+#### 📚 Audiobook Feature
+*   Full PDF-to-audiobook pipeline: upload PDF → Gemini 1.5 Flash cleans text → Kokoro/KittenTTS narrates → single seekable WAV with chapter markers.
+*   Audible-style player: scrub bar, chapter list, sleep timer, live transcript, cover art with ambient gradient.
+*   **OCR for scanned PDFs:** image-only pages now automatically processed via Gemini vision — no more 422 rejections.
+*   Per-page resumability; interrupted books resume at the last completed page.
+
+#### 🤖 AI / Backend
+*   **Migrated to `google-genai` 2.0.0** (replaces deprecated `google-generativeai`). All calls use native async (`client.aio`).
+*   Section detection via Gemini; falls back to PDF outline bookmarks when available.
+*   SQLite (WAL mode) metadata store — replaces per-book `meta.json`; auto-migrates on startup.
+*   81 backend tests passing.
+
+#### 🏎️ TTS Engine
+*   KittenTTS nano/micro/mini variants with lookahead inference cache (sub-20ms cache-hit TTFA).
+*   Removed `allow_spinning=1` — fixes 800-900% idle CPU on Apple Silicon.
+
+#### 🖥️ macOS UI
+*   NavigationStack-based audiobook player (keyboard shortcuts, sidebar stays visible).
+*   Preferences: Gemini key verify, per-book voice/speed defaults.
+*   NowPlayingBar / Continue Listening, global drag-and-drop PDF entry point.
+*   Smooth TTS preemption fade (120ms) when hotkey fires during audiobook playback.
+
+#### 📦 Build
+*   PyInstaller cleanup: removed stale `google.ai` and `google.api_core` flags that caused harmless but noisy warnings.
+*   `create_dmg.sh` now auto-detects Xcode.app so builds no longer fail when `xcode-select` points to CommandLineTools.
+
+---
+
 ### 🚀 SuperSay v1.1.0 Changelog
 
 #### 📚 Audiobook Feature (New)
