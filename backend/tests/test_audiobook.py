@@ -660,7 +660,9 @@ async def test_gemini_clean_page_retries_then_succeeds(monkeypatch):
             raise GeminiBadResponseError("transient")
         return "cleaned text"
 
-    monkeypatch.setattr(GeminiCleaner, "_async_clean", AsyncMock(side_effect=flaky_async))
+    monkeypatch.setattr(
+        GeminiCleaner, "_async_clean", AsyncMock(side_effect=flaky_async)
+    )
     monkeypatch.setattr("asyncio.sleep", AsyncMock(return_value=None))
     out = await GeminiCleaner.clean_page("k", "raw")
     assert out == "cleaned text"
@@ -677,7 +679,9 @@ async def test_gemini_auth_error_does_not_retry(monkeypatch):
         calls["n"] += 1
         raise GeminiAuthError("bad key")
 
-    monkeypatch.setattr(GeminiCleaner, "_async_clean", AsyncMock(side_effect=auth_failing))
+    monkeypatch.setattr(
+        GeminiCleaner, "_async_clean", AsyncMock(side_effect=auth_failing)
+    )
     monkeypatch.setattr("asyncio.sleep", AsyncMock(return_value=None))
     with pytest.raises(GeminiAuthError):
         await GeminiCleaner.clean_page("k", "raw")
@@ -833,11 +837,18 @@ async def test_clean_phase_uses_ocr_for_image_pages(monkeypatch):
         clean_calls.append(1)
         return "Cleaned text."
 
-    monkeypatch.setattr(_pe.PDFExtractor, "render_page_image", classmethod(lambda cls, p, n, **kw: b"imgbytes"))
+    monkeypatch.setattr(
+        _pe.PDFExtractor,
+        "render_page_image",
+        classmethod(lambda cls, p, n, **kw: b"imgbytes"),
+    )
 
     from app.services import gemini_cleaner as _gc
+
     monkeypatch.setattr(_gc.GeminiCleaner, "ocr_page", AsyncMock(side_effect=_fake_ocr))
-    monkeypatch.setattr(_gc.GeminiCleaner, "clean_page", AsyncMock(side_effect=_fake_clean))
+    monkeypatch.setattr(
+        _gc.GeminiCleaner, "clean_page", AsyncMock(side_effect=_fake_clean)
+    )
 
     _svc.AudiobookService.initialize()
     await _svc.AudiobookService._phase_clean(bid, api_key="test-key")

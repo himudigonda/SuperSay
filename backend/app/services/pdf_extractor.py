@@ -162,7 +162,9 @@ class PDFExtractor:
         cls._atomic_write_bytes(out, buf.getvalue())
 
     @classmethod
-    def render_page_image(cls, pdf_path: str, page_num: int, resolution: int = 200) -> bytes:
+    def render_page_image(
+        cls, pdf_path: str, page_num: int, resolution: int = 200
+    ) -> bytes:
         """Render a single page (1-indexed) to JPEG bytes for Gemini OCR."""
         with pdfplumber.open(pdf_path) as pdf:
             page = pdf.pages[page_num - 1]

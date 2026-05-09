@@ -88,7 +88,18 @@ class GeminiCleaner:
     @staticmethod
     def _reraise_typed(e: Exception) -> None:
         msg = str(e).lower()
-        if any(k in msg for k in ("api_key", "api key", "permission", "unauthorized", "401", "credentials", "invalid")):
+        if any(
+            k in msg
+            for k in (
+                "api_key",
+                "api key",
+                "permission",
+                "unauthorized",
+                "401",
+                "credentials",
+                "invalid",
+            )
+        ):
             raise GeminiAuthError(str(e)) from e
         if any(k in msg for k in ("429", "rate limit", "quota", "resource_exhausted")):
             raise GeminiRateLimitError(str(e)) from e
@@ -226,7 +237,7 @@ class GeminiCleaner:
             block = f"=== PAGE {i} ===\n{p}\n"
             if cur_chars + len(block) > cls._SECTION_CHUNK_CHARS and cur_pages:
                 chunks.append((cur_start, "".join(cur_pages)))
-                tail = cur_pages[-cls._SECTION_CHUNK_PAGE_OVERLAP:]
+                tail = cur_pages[-cls._SECTION_CHUNK_PAGE_OVERLAP :]
                 cur_pages = list(tail)
                 cur_start = i - len(tail) + 1
                 cur_chars = sum(len(t) for t in cur_pages)
