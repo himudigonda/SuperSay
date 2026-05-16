@@ -212,6 +212,16 @@ async def upload_audiobook(
         AudiobookStore.delete_book(book_id)
         raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}") from e
 
+    # P9: reject zero-page PDFs early — the pipeline would "complete" instantly
+    # with no audio, leaving the user confused. Delete the staged book before
+    # returning the error so it doesn't appear in the library.
+    if page_count == 0:
+        AudiobookStore.delete_book(book_id)
+        raise HTTPException(
+            status_code=400,
+            detail="This PDF has no extractable pages. Try a different file.",
+        )
+
     # Image-only books are processed via Gemini vision OCR — no rejection.
     # Substitute a per-page character estimate for the cost/duration calculation
     # since text extraction returns nothing useful for scanned pages.
@@ -228,11 +238,15 @@ async def upload_audiobook(
         )
 
     # Render cover in background — UI fetches /audiobook/{id}/cover when ready.
+    # P2: write cover_status to meta so the UI knows whether to keep retrying
+    # (/cover returns 404 until ready; "failed" means stop retrying).
     async def _bg_render_cover() -> None:
         try:
             await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
+            await AudiobookStore.update_meta(book_id, cover_status="ready")
         except Exception as e:
             print(f"[API] cover render failed for {book_id}: {e}")
+            await AudiobookStore.update_meta(book_id, cover_status="failed")
 
     asyncio.create_task(_bg_render_cover())
 

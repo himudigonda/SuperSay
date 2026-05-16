@@ -152,6 +152,9 @@ struct AudiobookLibraryView: View {
                                 .environmentObject(bookVM)
                         }
                         .buttonStyle(.plain)
+                        // P7: without contentShape, macOS hit-testing fires only over
+                        // visible pixels. This extends hover/click to the full card rect.
+                        .contentShape(Rectangle())
                     }
                 }
                 .padding(36)

@@ -18,20 +18,23 @@ final class AudiobookService: NSObject, @unchecked Sendable {
     // MARK: - Listing
 
     func list() async throws -> [Audiobook] {
-        let url = baseURL.appendingPathComponent("audiobook")
-        let (data, _) = try await URLSession.shared.data(from: url)
+        var req = URLRequest(url: baseURL.appendingPathComponent("audiobook"))
+        req.timeoutInterval = 10
+        let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder().decode([Audiobook].self, from: data)
     }
 
     func get(_ id: String) async throws -> Audiobook {
-        let url = baseURL.appendingPathComponent("audiobook/\(id)")
-        let (data, _) = try await URLSession.shared.data(from: url)
+        var req = URLRequest(url: baseURL.appendingPathComponent("audiobook/\(id)"))
+        req.timeoutInterval = 10
+        let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder().decode(Audiobook.self, from: data)
     }
 
     func delete(_ id: String) async throws {
         var req = URLRequest(url: baseURL.appendingPathComponent("audiobook/\(id)"))
         req.httpMethod = "DELETE"
+        req.timeoutInterval = 10
         _ = try await URLSession.shared.data(for: req)
         let cached = cacheDir.appendingPathComponent("\(id).wav")
         try? FileManager.default.removeItem(at: cached)
@@ -45,8 +48,9 @@ final class AudiobookService: NSObject, @unchecked Sendable {
 
     /// Fetch the transcript JSON (sections + page→time + per-page text).
     func transcript(for id: String) async throws -> Transcript {
-        let url = baseURL.appendingPathComponent("audiobook/\(id)/transcript")
-        let (data, _) = try await URLSession.shared.data(from: url)
+        var req = URLRequest(url: baseURL.appendingPathComponent("audiobook/\(id)/transcript"))
+        req.timeoutInterval = 15  // slightly longer: transcript JSON can be large for big books
+        let (data, _) = try await URLSession.shared.data(for: req)
         return try JSONDecoder().decode(Transcript.self, from: data)
     }
 

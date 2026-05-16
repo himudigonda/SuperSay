@@ -1,4 +1,3 @@
-import Combine
 import PDFKit
 import SwiftUI
 
@@ -7,10 +6,8 @@ struct AudiobookCardView: View {
     @EnvironmentObject var bookVM: AudiobookViewModel
     let book: Audiobook
     @State private var hovering = false
-    @State private var wavePhase: Double = 0
 
     private let baseURL = URL(string: "http://127.0.0.1:10101")!
-    private let waveTimer = Timer.publish(every: 0.12, on: .main, in: .common).autoconnect()
 
     var status: ProcessingStatus {
         bookVM.processingState[book.bookID] ?? book.displayStatus
@@ -178,20 +175,23 @@ struct AudiobookCardView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
     }
 
+    // P8: Use TimelineView instead of a per-card Timer.publish so all processing
+    // cards share the system animation compositor — zero extra timers regardless
+    // of how many cards are visible simultaneously.
     private var processingWaveform: some View {
-        HStack(spacing: 3) {
-            ForEach(0..<16, id: \.self) { i in
-                let height = 4 + 14 * abs(sin(wavePhase + Double(i) * 0.4))
-                RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                    .fill(Color.cyan.opacity(0.85))
-                    .frame(width: 3, height: height)
+        TimelineView(.animation) { ctx in
+            let phase = ctx.date.timeIntervalSinceReferenceDate * 2.9
+            HStack(spacing: 3) {
+                ForEach(0..<16, id: \.self) { i in
+                    let height = 4 + 14 * abs(sin(phase + Double(i) * 0.4))
+                    RoundedRectangle(cornerRadius: 1.5, style: .continuous)
+                        .fill(Color.cyan.opacity(0.85))
+                        .frame(width: 3, height: height)
+                }
             }
-        }
-        .frame(height: 18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 2)
-        .onReceive(waveTimer) { _ in
-            wavePhase += 0.35
+            .frame(height: 18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 2)
         }
     }
 

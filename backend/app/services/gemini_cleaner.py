@@ -13,7 +13,7 @@ from google.genai import types
 
 # Pricing constants (Gemini 2.5 Flash, May 2026). Update if rates change.
 # https://ai.google.dev/gemini-api/docs/pricing
-INPUT_USD_PER_M_TOKENS = 0.15   # $0.15/M tokens (<=200k ctx)
+INPUT_USD_PER_M_TOKENS = 0.15  # $0.15/M tokens (<=200k ctx)
 OUTPUT_USD_PER_M_TOKENS = 0.60  # $0.60/M tokens (<=200k ctx)
 
 MODEL_NAME = "gemini-2.5-flash"
