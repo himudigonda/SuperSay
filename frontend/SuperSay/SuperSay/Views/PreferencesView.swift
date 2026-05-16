@@ -139,8 +139,8 @@ struct PreferencesView: View {
                                 .disabled(bookVM.draftKey.trimmingCharacters(in: .whitespaces).isEmpty || bookVM.verifyingKey)
                             }
                             HStack {
-                                Link("Get a key from ai.google.dev",
-                                     destination: URL(string: "https://ai.google.dev")!)
+                                Link("Get a key from aistudio.google.com",
+                                     destination: URL(string: "https://aistudio.google.com/apikey")!)
                                     .font(vm.appFont(size: 11))
                                     .foregroundStyle(.cyan)
                                 Spacer()

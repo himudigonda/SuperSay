@@ -1,4 +1,4 @@
-"""GeminiCleaner — text-cleaning and OCR via Gemini 1.5 Flash (google.genai SDK).
+"""GeminiCleaner — text-cleaning and OCR via Gemini 2.5 Flash (google.genai SDK).
 
 The user's API key is sent per-request (X-Gemini-Api-Key header from Swift).
 Never persisted on disk.
@@ -11,11 +11,12 @@ import re
 from google import genai
 from google.genai import types
 
-# Pricing constants (Gemini 1.5 Flash, May 2026). Update if rates change.
-INPUT_USD_PER_M_TOKENS = 0.075
-OUTPUT_USD_PER_M_TOKENS = 0.30
+# Pricing constants (Gemini 2.5 Flash, May 2026). Update if rates change.
+# https://ai.google.dev/gemini-api/docs/pricing
+INPUT_USD_PER_M_TOKENS = 0.15   # $0.15/M tokens (<=200k ctx)
+OUTPUT_USD_PER_M_TOKENS = 0.60  # $0.60/M tokens (<=200k ctx)
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 GEMINI_CLEAN_SYSTEM_PROMPT = """\
 You are a strict text-cleaning assistant preparing PDF page text for
@@ -88,16 +89,22 @@ class GeminiCleaner:
     @staticmethod
     def _reraise_typed(e: Exception) -> None:
         msg = str(e).lower()
+        # Model-not-found / 404 → transient bad-response, NOT an auth error.
+        # Check this first so "invalid model" doesn't fall into the auth bucket.
+        if any(k in msg for k in ("not found", "404", "model", "does not exist")):
+            raise GeminiBadResponseError(str(e)) from e
+        # True auth failures: bad key, wrong project, permission denied.
         if any(
             k in msg
             for k in (
                 "api_key",
                 "api key",
-                "permission",
+                "permission denied",
                 "unauthorized",
                 "401",
                 "credentials",
-                "invalid",
+                "invalid api key",
+                "api key not valid",
             )
         ):
             raise GeminiAuthError(str(e)) from e
