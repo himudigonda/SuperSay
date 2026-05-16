@@ -281,7 +281,11 @@ class DashboardViewModel: ObservableObject {
                     await backend.start()
                 }
 
-                try? await Task.sleep(nanoseconds: 5 * 1_000_000_000)
+                // Poll aggressively (500 ms) while backend is offline/starting up,
+                // then relax to 5 s once stable. This cuts the "waiting for backend"
+                // window from up to 5 s to under 500 ms in normal operation.
+                let delay: UInt64 = isNowOnline ? 5_000_000_000 : 500_000_000
+                try? await Task.sleep(nanoseconds: delay)
             }
         }
     }

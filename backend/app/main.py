@@ -1,5 +1,6 @@
 import asyncio
 import os
+from contextlib import asynccontextmanager
 
 import uvicorn
 from app.api.endpoints import router
@@ -11,19 +12,37 @@ from fastapi import FastAPI
 # Force asyncio backend for uvicorn compatibility
 os.environ["ANYIO_BACKEND"] = "asyncio"
 
-from contextlib import asynccontextmanager
+
+async def _load_engine_background() -> None:
+    """Load the default TTS engine off the event loop so uvicorn starts immediately.
+
+    /health returns {"status": "cold", "loaded": false} until this finishes.
+    /speak calls EngineManager.ensure_loaded() which waits transparently.
+    Idle-watcher tasks are started only after the model is in memory.
+    """
+    from app.services.kitten_engine import KittenEngine
+
+    loop = asyncio.get_running_loop()
+    try:
+        print("[Startup] Loading TTS engine in background…")
+        await loop.run_in_executor(None, EngineManager.initialize)
+        print("[Startup] ✅ TTS engine ready")
+    except Exception as exc:
+        print(f"[Startup] ❌ Engine init failed: {exc}")
+        return
+
+    # Wire idle-unload watchers only after the model is in RAM.
+    asyncio.create_task(TTSEngine.idle_watcher())
+    asyncio.create_task(KittenEngine.idle_watcher())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: initialize default engine (Kokoro), launch idle watchers.
-    EngineManager.initialize()
-    asyncio.create_task(TTSEngine.idle_watcher())
-    from app.services.kitten_engine import KittenEngine
+    # Kick off model load as a background task — uvicorn starts serving
+    # immediately and /health returns "cold" until loading finishes (~2-3 s).
+    asyncio.create_task(_load_engine_background())
 
-    asyncio.create_task(KittenEngine.idle_watcher())
-
-    # Audiobook orchestrator + crash-recovery
+    # Audiobook orchestrator + crash-recovery (fast, no I/O blocking)
     from app.services.audiobook_service import AudiobookService
 
     AudiobookService.initialize()

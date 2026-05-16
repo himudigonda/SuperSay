@@ -87,12 +87,11 @@ final class BackendService: NSObject, @unchecked Sendable {
             stateQueue.sync {
                 self.process = p
                 self.processPipe = pipe  // Store pipe reference for cleanup on stop
+                // Clear immediately: process != nil is the real double-start guard.
+                // The old 3-second DispatchQueue timer was arbitrary and wasted time.
+                self._isLaunching = false
             }
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
-                self.stateQueue.sync { self._isLaunching = false }
-            }
         } catch {
             print("❌ Backend Launch Failed: \(error)")
             stateQueue.sync { _isLaunching = false }
@@ -153,7 +152,9 @@ final class BackendService: NSObject, @unchecked Sendable {
 
     func checkHealth() async -> HealthStatus {
         var request = URLRequest(url: baseURL.appendingPathComponent("health"))
-        request.timeoutInterval = 3
+        // 1-second timeout: we poll at 500 ms when offline, so 3 s was wasting
+        // multiple entire poll cycles on each failed request.
+        request.timeoutInterval = 1
         do {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
