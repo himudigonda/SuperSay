@@ -26,8 +26,13 @@ backend/.python-version
 # Git handles files >100MB poorly. These should stay local.
 *.onnx
 *.bin
+*.npz
 backend/kokoro-v1.0.onnx
 backend/voices-v1.0.bin
+# Kitten TTS model weight files (not used, kept for potential local testing)
+backend/kitten-*.onnx
+backend/kitten-*.npz
+backend/kitten-*.json
 
 # --- Xcode / Swift ---
 # Build artifacts
@@ -73,3 +78,4 @@ backend/benchmarks/pipeline_stats.json
 backend/benchmarks/results.json
 RELEASE_NOTES.tmp
 RELEASE_NOTES.all
+broskifile

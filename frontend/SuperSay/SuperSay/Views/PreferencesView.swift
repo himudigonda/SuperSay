@@ -26,41 +26,6 @@ struct PreferencesView: View {
                 PreferenceSection(title: "Voice Engine", icon: "cpu") {
                     VStack(spacing: 20) {
                         HStack {
-                            Label("TTS Engine", systemImage: "cpu")
-                                .font(vm.appFont(size: 14))
-                            Spacer()
-                            Picker("", selection: $vm.ttsEngine) {
-                                Text("Kokoro").tag("kokoro")
-                                Text("KittenTTS").tag("kitten")
-                            }
-                            .frame(width: 150)
-                            .labelsHidden()
-                        }
-
-                        if vm.ttsEngine == "kitten" {
-                            HStack {
-                                Label("Model Variant", systemImage: "sparkles")
-                                    .font(vm.appFont(size: 14))
-                                Spacer()
-                                Picker("", selection: $vm.kittenModel) {
-                                    Text("Nano — 15M").tag("nano")
-                                    Text("Micro — 40M").tag("micro")
-                                    Text("Mini — 80M").tag("mini")
-                                }
-                                .frame(width: 150)
-                                .labelsHidden()
-                            }
-                        }
-
-                        Text(vm.ttsEngine == "kitten"
-                             ? "KittenTTS is faster and smaller. Kokoro offers more voices."
-                             : "Kokoro delivers high-quality, expressive voices.")
-                            .font(vm.appFont(size: 11))
-                            .foregroundStyle(.secondary)
-
-                        Divider()
-
-                        HStack {
                             Label("Active Voice", systemImage: "person.wave.2")
                                 .font(vm.appFont(size: 14))
                             Spacer()
@@ -72,6 +37,10 @@ struct PreferencesView: View {
                             .frame(width: 150)
                             .labelsHidden()
                         }
+
+                        Text("Kokoro delivers high-quality, expressive voices.")
+                            .font(vm.appFont(size: 11))
+                            .foregroundStyle(.secondary)
 
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {

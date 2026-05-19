@@ -70,10 +70,9 @@ def get_engine():
 
 @router.post("/engine")
 async def set_engine(req: EngineRequest):
-    """Switch active TTS engine at runtime. No restart required."""
-    if req.engine not in ("kokoro", "kitten"):
+    """Return current engine state. Only Kokoro is supported."""
+    if req.engine != "kokoro":
         return Response(status_code=400, content=f"Unknown engine: {req.engine}")
-    await EngineManager.switch(req.engine, req.model)  # type: ignore[arg-type]
     return EngineManager.state()
 
 

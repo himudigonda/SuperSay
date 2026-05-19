@@ -14,26 +14,23 @@ os.environ["ANYIO_BACKEND"] = "asyncio"
 
 
 async def _load_engine_background() -> None:
-    """Load the default TTS engine off the event loop so uvicorn starts immediately.
+    """Load Kokoro off the event loop so uvicorn starts immediately.
 
     /health returns {"status": "cold", "loaded": false} until this finishes.
     /speak calls EngineManager.ensure_loaded() which waits transparently.
-    Idle-watcher tasks are started only after the model is in memory.
+    Idle-watcher task is started only after the model is in memory.
     """
-    from app.services.kitten_engine import KittenEngine
-
     loop = asyncio.get_running_loop()
     try:
-        print("[Startup] Loading TTS engine in background…")
+        print("[Startup] Loading Kokoro TTS engine in background…")
         await loop.run_in_executor(None, EngineManager.initialize)
-        print("[Startup] ✅ TTS engine ready")
+        print("[Startup] ✅ Kokoro TTS engine ready")
     except Exception as exc:
         print(f"[Startup] ❌ Engine init failed: {exc}")
         return
 
-    # Wire idle-unload watchers only after the model is in RAM.
+    # Wire idle-unload watcher only after the model is in RAM.
     asyncio.create_task(TTSEngine.idle_watcher())
-    asyncio.create_task(KittenEngine.idle_watcher())
 
 
 @asynccontextmanager

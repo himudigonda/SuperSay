@@ -64,13 +64,18 @@ def test_engine_get_endpoint(mock_ensure):
     assert isinstance(body["voices"], list)
 
 
-@patch.object(EngineManager, "switch")
-@patch.object(EngineManager, "ensure_loaded")
-def test_engine_post_endpoint(mock_ensure, mock_switch):
-    """Test POST /engine switches engines."""
-    payload = {"engine": "kitten", "model": "nano"}
+def test_engine_post_endpoint():
+    """Test POST /engine with kokoro returns current engine state."""
+    payload = {"engine": "kokoro"}
     response = client.post("/engine", json=payload)
 
     assert response.status_code == 200
     body = response.json()
-    assert "engine" in body
+    assert body["engine"] == "kokoro"
+    assert "voices" in body
+
+
+def test_engine_post_unknown():
+    """Test POST /engine with unknown engine returns 400."""
+    response = client.post("/engine", json={"engine": "kitten"})
+    assert response.status_code == 400
