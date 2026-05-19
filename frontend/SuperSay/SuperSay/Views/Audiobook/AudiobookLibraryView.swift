@@ -238,7 +238,7 @@ struct AudiobookLibraryView: View {
             for: pdf,
             voice: voice,
             speed: speed,
-            engine: vm.ttsEngine
+            engine: "kokoro"
         )
     }
 

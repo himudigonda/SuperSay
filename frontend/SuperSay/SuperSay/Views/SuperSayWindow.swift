@@ -298,7 +298,7 @@ struct SuperSayWindow: View {
                     for: url,
                     voice: voice,
                     speed: speed,
-                    engine: vm.ttsEngine
+                    engine: "kokoro"
                 )
             }
         }
