@@ -27,10 +27,17 @@ final class BackendService: NSObject, @unchecked Sendable {
     // MARK: - Process Management
 
     func start() {
+        // CRITICAL: stateQueue.sync closure `return` only exits the closure, NOT this
+        // function. Use a flag so we can guard at function scope.
+        var shouldStart = false
         stateQueue.sync {
             guard process == nil, !_isLaunching else { return }
             _isLaunching = true
+            shouldStart = true
         }
+        // Real function-level guard — prevents the pkill + relaunch every 500 ms while
+        // the server is already starting (the previous crash-loop root cause).
+        guard shouldStart else { return }
 
         let bundleID = Bundle.main.bundleIdentifier ?? "com.himudigonda.SuperSay"
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appendingPathComponent(bundleID)
@@ -45,7 +52,7 @@ final class BackendService: NSObject, @unchecked Sendable {
             return
         }
 
-        // Kill existing instances
+        // Kill any stale instance left over from a previous session / crash
         let cleanup = Process()
         cleanup.launchPath = "/usr/bin/pkill"
         cleanup.arguments = ["-f", "SuperSayServer"]
@@ -82,19 +89,32 @@ final class BackendService: NSObject, @unchecked Sendable {
             }
         }
 
+        // When the process exits (crash or intentional stop), clear the reference so
+        // the next heartbeat cycle can call start() again and restart it.
+        p.terminationHandler = { [weak self] terminated in
+            guard let self else { return }
+            self.stateQueue.sync {
+                if self.process === terminated {
+                    self.process = nil
+                    self._isLaunching = false
+                }
+            }
+            print("⚠️ Backend process exited (PID: \(terminated.processIdentifier), status: \(terminated.terminationStatus))")
+        }
+
         do {
             try p.run()
             stateQueue.sync {
                 self.process = p
-                self.processPipe = pipe  // Store pipe reference for cleanup on stop
-                // Clear immediately: process != nil is the real double-start guard.
-                // The old 3-second DispatchQueue timer was arbitrary and wasted time.
+                self.processPipe = pipe
                 self._isLaunching = false
             }
             print("✅ Backend Launched (PID: \(p.processIdentifier))")
         } catch {
             print("❌ Backend Launch Failed: \(error)")
-            stateQueue.sync { _isLaunching = false }
+            stateQueue.sync {
+                _isLaunching = false
+            }
         }
     }
 
