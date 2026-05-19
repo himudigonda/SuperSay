@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-echo "🚀 STARTING NUCLEAR BACKEND BUILD..."
+echo "🚀 STARTING BACKEND BUILD..."
 
 # 1. Cleanup
 pkill -9 SuperSayServer || true
@@ -8,7 +8,7 @@ rm -rf backend/dist backend/build
 rm -f frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
 
 cd backend
-# Ensure venv exists
+# Ensure venv exists and is up to date
 uv sync
 
 # 2. LOCATE CRITICAL ASSETS
@@ -16,23 +16,18 @@ PYTHON_EXEC="./.venv/bin/python"
 ESPEAK_PATH=$($PYTHON_EXEC -c "import os, espeakng_loader; print(os.path.dirname(espeakng_loader.__file__))")
 KOKORO_CONFIG=$($PYTHON_EXEC -c "import os, kokoro_onnx; print(os.path.join(os.path.dirname(kokoro_onnx.__file__), 'config.json'))")
 
-echo "📍 Config located at: $KOKORO_CONFIG"
-echo "📍 Espeak located at: $ESPEAK_PATH"
+echo "📍 Kokoro config: $KOKORO_CONFIG"
+echo "📍 Espeak data:   $ESPEAK_PATH"
 
-# 3. COMPILE
-# Build command with all kitten variants (nano required, micro/mini optional)
-CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name 'SuperSayServer' \
+# 3. COMPILE (Kokoro-only — ~300 MB vs ~700 MB with Kitten)
+$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name 'SuperSayServer' \
     --paths . \
     --add-data 'kokoro-v1.0.onnx:.' \
     --add-data 'voices-v1.0.bin:.' \
-    --add-data 'kitten-nano.onnx:.' \
-    --add-data 'kitten-nano-voices.npz:.' \
-    --add-data 'kitten-nano-config.json:.' \
-    --add-data '$ESPEAK_PATH:espeakng_loader' \
+    --add-data "$ESPEAK_PATH:espeakng_loader" \
     --collect-all 'phonemizer' \
     --collect-all 'language_tags' \
     --collect-all 'kokoro_onnx' \
-    --collect-all 'kittentts' \
     --collect-all 'misaki' \
     --collect-all 'pdfplumber' \
     --collect-all 'pdfminer' \
@@ -48,32 +43,17 @@ CMD="$PYTHON_EXEC -m PyInstaller --clean --noconsole --onedir --noconfirm --name
     --hidden-import 'multipart' \
     --hidden-import 'google.genai.types' \
     --hidden-import 'pdfminer.layout' \
-    --hidden-import 'pdfminer.high_level'"
+    --hidden-import 'pdfminer.high_level' \
+    app/main.py
 
-# Add optional micro variant files (skip if not downloaded)
-if [ -f kitten-micro.onnx ]; then
-    CMD="$CMD --add-data 'kitten-micro.onnx:.' --add-data 'kitten-micro-voices.npz:.' --add-data 'kitten-micro-config.json:.'"
-fi
-
-# Add optional mini variant files (skip if not downloaded)
-if [ -f kitten-mini.onnx ]; then
-    CMD="$CMD --add-data 'kitten-mini.onnx:.' --add-data 'kitten-mini-voices.npz:.' --add-data 'kitten-mini-config.json:.'"
-fi
-
-CMD="$CMD app/main.py"
-
-# Execute the build command
-eval "$CMD"
-
-# 4. SURGICAL INJECTION (Double Check)
-# Even with collect-all, we force copy config.json if it's missing to be 100% sure.
+# 4. SURGICAL INJECTION — force-copy config.json if collect-all missed it
 DEST_DIR="dist/SuperSayServer/_internal/kokoro_onnx"
 if [ ! -f "$DEST_DIR/config.json" ]; then
-    echo "💉 Manual injection of config.json required..."
+    echo "💉 Manual injection of config.json..."
     mkdir -p "$DEST_DIR"
     cp "$KOKORO_CONFIG" "$DEST_DIR/"
 else
-    echo "✅ config.json was collected automatically."
+    echo "✅ config.json collected automatically."
 fi
 
 # 5. ZIP AND MOVE
@@ -86,4 +66,4 @@ echo "📦 Installing to Resources..."
 mkdir -p ../frontend/SuperSay/SuperSay/Resources/
 mv dist/SuperSayServer.zip ../frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
 
-echo "✅ Nuclear Build Complete."
+echo "✅ Backend build complete."

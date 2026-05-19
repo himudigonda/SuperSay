@@ -26,11 +26,7 @@ setup:
 	@echo "✅ Setup Complete."
 
 # --- 🐍 BACKEND ---
-kitten-model:
-	@echo "📥 Downloading KittenTTS Model Files (nano required, micro/mini optional)..."
-	cd backend && uv sync && uv run python ../scripts/download_kitten_model.py
-
-backend: kitten-model
+backend:
 	@echo "------------------------------------------------"
 	@echo "🚀 [1/3] Building Python Backend..."
 	@echo "------------------------------------------------"
