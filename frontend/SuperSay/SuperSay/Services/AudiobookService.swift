@@ -21,7 +21,20 @@ final class AudiobookService: NSObject, @unchecked Sendable {
         var req = URLRequest(url: baseURL.appendingPathComponent("audiobook"))
         req.timeoutInterval = 10
         let (data, _) = try await URLSession.shared.data(for: req)
-        return try JSONDecoder().decode([Audiobook].self, from: data)
+        // Decode each entry individually so one corrupt/partial book (e.g. a ghost
+        // entry left by a failed upload) doesn't poison the whole library load.
+        guard let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else {
+            return try JSONDecoder().decode([Audiobook].self, from: data)
+        }
+        let decoder = JSONDecoder()
+        return items.compactMap { dict in
+            guard let itemData = try? JSONSerialization.data(withJSONObject: dict) else { return nil }
+            if let book = try? decoder.decode(Audiobook.self, from: itemData) { return book }
+            if let id = dict["book_id"] as? String {
+                print("⚠️ AudiobookService: skipping corrupt entry for book_id=\(id)")
+            }
+            return nil
+        }
     }
 
     func get(_ id: String) async throws -> Audiobook {

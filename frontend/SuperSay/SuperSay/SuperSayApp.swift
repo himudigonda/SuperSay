@@ -34,9 +34,12 @@ struct SuperSayApp: App {
         // Clear old log
         try? "".write(to: logURL, atomically: true, encoding: .utf8)
 
-        // Redirect stdout and stderr to the log file
+        // Redirect stdout and stderr to the log file, then disable buffering so every
+        // print() line lands immediately (no partial logs on crash or low-volume runs).
         freopen(logURL.path, "a+", stdout)
         freopen(logURL.path, "a+", stderr)
+        setbuf(stdout, nil)
+        setbuf(stderr, nil)
 
         print("--- SuperSay Frontend Log Started: \(Date()) ---")
 

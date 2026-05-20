@@ -12,6 +12,27 @@ from fastapi import FastAPI
 # Force asyncio backend for uvicorn compatibility
 os.environ["ANYIO_BACKEND"] = "asyncio"
 
+# PID of the Swift app that spawned us (captured at import time, before any fork).
+_PARENT_PID = os.getppid()
+
+
+async def _parent_watchdog() -> None:
+    """Exit if the parent macOS app process disappears (crash, force-kill, etc.).
+
+    Checks every 3 seconds whether the parent PID still exists via signal 0.
+    When it's gone, calls os._exit(0) — a hard exit that bypasses Python
+    shutdown hooks and ensures no zombie server lingers after an app crash.
+    """
+    while True:
+        await asyncio.sleep(3)
+        try:
+            os.kill(_PARENT_PID, 0)  # 0 = existence check only, no signal sent
+        except ProcessLookupError:
+            print("[Watchdog] Parent app gone — server exiting.")
+            os._exit(0)
+        except PermissionError:
+            pass  # process exists but we lack permission to signal it — keep running
+
 
 async def _load_engine_background() -> None:
     """Load Kokoro off the event loop so uvicorn starts immediately.
@@ -44,6 +65,10 @@ async def lifespan(app: FastAPI):
 
     AudiobookService.initialize()
     asyncio.create_task(AudiobookService.resume_in_progress())
+
+    # Lifecycle watchdog: exit when the parent Swift app process disappears.
+    # Runs even when launched from a terminal (harmless — exits when the shell dies).
+    asyncio.create_task(_parent_watchdog())
 
     yield
     # Shutdown (if needed)

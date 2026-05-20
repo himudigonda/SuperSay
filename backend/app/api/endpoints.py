@@ -197,97 +197,108 @@ async def upload_audiobook(
     title = file.filename or "Untitled.pdf"
 
     book_id = AudiobookStore.create_book(title)
-    AudiobookStore.save_pdf(book_id, content)
-
-    pdf_path = AudiobookStore.pdf_path(book_id)
-    loop = asyncio.get_running_loop()
-
+    # Wrap everything after book creation so any unexpected failure cleans up
+    # the directory and never leaves an orphan row in the DB.
     try:
-        page_count = await loop.run_in_executor(None, PDFExtractor.page_count, pdf_path)
-        is_image_only = await loop.run_in_executor(
-            None, PDFExtractor.is_image_only, pdf_path
+        AudiobookStore.save_pdf(book_id, content)
+
+        pdf_path = AudiobookStore.pdf_path(book_id)
+        loop = asyncio.get_running_loop()
+
+        try:
+            page_count = await loop.run_in_executor(None, PDFExtractor.page_count, pdf_path)
+            is_image_only = await loop.run_in_executor(
+                None, PDFExtractor.is_image_only, pdf_path
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}") from e
+
+        # P9: reject zero-page PDFs early — the pipeline would "complete" instantly
+        # with no audio, leaving the user confused. Delete the staged book before
+        # returning the error so it doesn't appear in the library.
+        if page_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This PDF has no extractable pages. Try a different file.",
+            )
+
+        # Image-only books are processed via Gemini vision OCR — no rejection.
+        # Substitute a per-page character estimate for the cost/duration calculation
+        # since text extraction returns nothing useful for scanned pages.
+        _OCR_CHARS_PER_PAGE = 1500  # ~250 words × 6 chars/word
+        if is_image_only:
+            sample_words = 250
+            sample_chars = _OCR_CHARS_PER_PAGE
+        else:
+            sample_words = await loop.run_in_executor(
+                None, PDFExtractor.sample_word_count, pdf_path
+            )
+            sample_chars = await loop.run_in_executor(
+                None, PDFExtractor.sample_char_count, pdf_path
+            )
+
+        book_speed = float(speed) if speed is not None else 1.0
+        estimate = AudiobookService.estimate(
+            page_count=page_count,
+            sample_words=sample_words,
+            sample_chars=sample_chars,
+            speed=book_speed,
         )
+        estimate["token_count"] = GeminiCleaner.estimate_tokens(sample_chars * page_count)
+
+        state = EngineManager.state()
+        book_engine = engine or state.get("engine", "kokoro")
+        default_voice = (
+            state.get("voices", ["af_bella"])[0] if state.get("voices") else "af_bella"
+        )
+        book_voice = voice or default_voice
+
+        meta = AudiobookStore.initial_meta(
+            book_id=book_id,
+            title=title,
+            page_count=page_count,
+            engine=book_engine,
+            voice=book_voice,
+            speed=book_speed,
+            estimated=estimate,
+        )
+        AudiobookStore.write_meta(book_id, meta)
+
+        # Render cover in background — scheduled AFTER write_meta so that if this
+        # task runs before any caller writes to meta, it still sees the full initial
+        # row and update_meta can do a proper read-modify-write without producing a
+        # partial/corrupt entry (the root cause of the ghost-book bug).
+        # P2: write cover_status to meta so the UI knows whether to keep retrying
+        # (/cover returns 404 until ready; "failed" means stop retrying).
+        async def _bg_render_cover() -> None:
+            try:
+                await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
+                await AudiobookStore.update_meta(book_id, cover_status="ready")
+            except Exception as e:
+                print(f"[API] cover render failed for {book_id}: {e}")
+                await AudiobookStore.update_meta(book_id, cover_status="failed")
+
+        asyncio.create_task(_bg_render_cover())
+
+        return AudiobookEstimate(
+            book_id=book_id,
+            title=title,
+            page_count=page_count,
+            estimated_token_count=estimate["token_count"],
+            cost_warning=estimate["cost_usd"] >= COST_WARNING_THRESHOLD_USD,
+            word_count_estimate=estimate["words"],
+            estimated_processing_seconds=estimate["processing_seconds"],
+            estimated_audio_seconds=estimate["audio_seconds"],
+            estimated_cost_usd=estimate["cost_usd"],
+            is_image_only=is_image_only,
+        )
+
+    except HTTPException:
+        AudiobookStore.delete_book(book_id)
+        raise
     except Exception as e:
         AudiobookStore.delete_book(book_id)
-        raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}") from e
-
-    # P9: reject zero-page PDFs early — the pipeline would "complete" instantly
-    # with no audio, leaving the user confused. Delete the staged book before
-    # returning the error so it doesn't appear in the library.
-    if page_count == 0:
-        AudiobookStore.delete_book(book_id)
-        raise HTTPException(
-            status_code=400,
-            detail="This PDF has no extractable pages. Try a different file.",
-        )
-
-    # Image-only books are processed via Gemini vision OCR — no rejection.
-    # Substitute a per-page character estimate for the cost/duration calculation
-    # since text extraction returns nothing useful for scanned pages.
-    _OCR_CHARS_PER_PAGE = 1500  # ~250 words × 6 chars/word
-    if is_image_only:
-        sample_words = 250
-        sample_chars = _OCR_CHARS_PER_PAGE
-    else:
-        sample_words = await loop.run_in_executor(
-            None, PDFExtractor.sample_word_count, pdf_path
-        )
-        sample_chars = await loop.run_in_executor(
-            None, PDFExtractor.sample_char_count, pdf_path
-        )
-
-    # Render cover in background — UI fetches /audiobook/{id}/cover when ready.
-    # P2: write cover_status to meta so the UI knows whether to keep retrying
-    # (/cover returns 404 until ready; "failed" means stop retrying).
-    async def _bg_render_cover() -> None:
-        try:
-            await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
-            await AudiobookStore.update_meta(book_id, cover_status="ready")
-        except Exception as e:
-            print(f"[API] cover render failed for {book_id}: {e}")
-            await AudiobookStore.update_meta(book_id, cover_status="failed")
-
-    asyncio.create_task(_bg_render_cover())
-
-    book_speed = float(speed) if speed is not None else 1.0
-    estimate = AudiobookService.estimate(
-        page_count=page_count,
-        sample_words=sample_words,
-        sample_chars=sample_chars,
-        speed=book_speed,
-    )
-    estimate["token_count"] = GeminiCleaner.estimate_tokens(sample_chars * page_count)
-
-    state = EngineManager.state()
-    book_engine = engine or state.get("engine", "kokoro")
-    default_voice = (
-        state.get("voices", ["af_bella"])[0] if state.get("voices") else "af_bella"
-    )
-    book_voice = voice or default_voice
-
-    meta = AudiobookStore.initial_meta(
-        book_id=book_id,
-        title=title,
-        page_count=page_count,
-        engine=book_engine,
-        voice=book_voice,
-        speed=book_speed,
-        estimated=estimate,
-    )
-    AudiobookStore.write_meta(book_id, meta)
-
-    return AudiobookEstimate(
-        book_id=book_id,
-        title=title,
-        page_count=page_count,
-        estimated_token_count=estimate["token_count"],
-        cost_warning=estimate["cost_usd"] >= COST_WARNING_THRESHOLD_USD,
-        word_count_estimate=estimate["words"],
-        estimated_processing_seconds=estimate["processing_seconds"],
-        estimated_audio_seconds=estimate["audio_seconds"],
-        estimated_cost_usd=estimate["cost_usd"],
-        is_image_only=is_image_only,
-    )
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}") from e
 
 
 @router.post("/audiobook/{book_id}/start")
