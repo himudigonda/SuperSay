@@ -61,7 +61,14 @@ struct AudiobookLibraryView: View {
             .navigationTitle("Audiobooks")
             .toolbar { toolbarContent }
             .onDrop(of: [.fileURL], isTargeted: $hoveringDrop, perform: handleDrop)
-            .fileImporter(isPresented: $showImporter, allowedContentTypes: [.pdf]) { result in
+            .fileImporter(
+                isPresented: $showImporter,
+                allowedContentTypes: [
+                    .pdf,
+                    .plainText,
+                    .init(importedAs: "org.openxmlformats.wordprocessingml.document"),
+                ]
+            ) { result in
                 if case .success(let url) = result {
                     let scoped = url.startAccessingSecurityScopedResource()
                     defer { if scoped { url.stopAccessingSecurityScopedResource() } }
@@ -223,7 +230,8 @@ struct AudiobookLibraryView: View {
             } else if let u = item as? URL {
                 url = u
             }
-            guard let url, url.pathExtension.lowercased() == "pdf" else { return }
+            let allowed: Set<String> = ["pdf", "txt", "docx", "md"]
+            guard let url, allowed.contains(url.pathExtension.lowercased()) else { return }
             Task { @MainActor in presentEstimate(for: url) }
         }
         return true
@@ -257,7 +265,7 @@ struct AudiobookLibraryView: View {
                     .font(vm.appFont(size: 14, weight: .black))
                     .kerning(3)
                     .foregroundStyle(.cyan)
-                Text("PDF only — up to 400 pages")
+                Text("PDF, TXT, DOCX, or MD — up to 400 pages")
                     .font(vm.appFont(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -285,12 +293,12 @@ struct AudiobookLibraryView: View {
                     .font(vm.appFont(size: 12, weight: .black))
                     .kerning(2)
                     .foregroundStyle(.secondary)
-                Text("Drop a PDF anywhere on this window to begin.")
+                Text("Drop a PDF, TXT, or DOCX anywhere on this window to begin.")
                     .font(vm.appFont(size: 14))
                     .foregroundStyle(.secondary)
             }
             Button { showImporter = true } label: {
-                Label("Choose a PDF", systemImage: "plus")
+                Label("Choose a File", systemImage: "plus")
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
             }

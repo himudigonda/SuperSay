@@ -180,8 +180,13 @@ class AudiobookStore:
         return os.path.join(cls.root_dir(), book_id)
 
     @classmethod
+    def source_file_path(cls, book_id: str, ext: str) -> str:
+        """Return the path for the uploaded source file with the given extension."""
+        return os.path.join(cls.book_dir(book_id), f"source.{ext}")
+
+    @classmethod
     def pdf_path(cls, book_id: str) -> str:
-        return os.path.join(cls.book_dir(book_id), "source.pdf")
+        return cls.source_file_path(book_id, "pdf")
 
     @classmethod
     def cover_path(cls, book_id: str) -> str:
@@ -223,6 +228,11 @@ class AudiobookStore:
     @classmethod
     def save_pdf(cls, book_id: str, content: bytes) -> None:
         Path(cls.pdf_path(book_id)).write_bytes(content)
+
+    @classmethod
+    def save_source(cls, book_id: str, content: bytes, ext: str) -> None:
+        """Save any source file type under source.{ext}."""
+        Path(cls.source_file_path(book_id, ext)).write_bytes(content)
 
     # ---------- meta (SQLite-backed) ----------
 

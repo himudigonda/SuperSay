@@ -26,6 +26,7 @@ from app.services.audiobook_store import AudiobookStore, _now_iso
 from app.services.engine_manager import EngineManager
 from app.services.gemini_cleaner import GeminiAuthError, GeminiCleaner
 from app.services.pdf_extractor import PDFExtractor
+from app.services.text_extractor import TextExtractor
 from app.services.tts import interactive_tts_lock
 
 # Pages with fewer extractable chars than this are treated as image-only
@@ -230,6 +231,7 @@ class AudiobookService:
                 "queued",
                 "extracting",
                 "cleaning",
+                "sectioning",
                 "tts",
                 "concatenating",
             }:
@@ -299,12 +301,21 @@ class AudiobookService:
         cls._emit(book_id, "phase_started", phase="extracting")
         loop = asyncio.get_running_loop()
 
-        page_count = await loop.run_in_executor(
-            cls._executor, PDFExtractor.page_count, AudiobookStore.pdf_path(book_id)
-        )
+        meta = AudiobookStore.read_meta(book_id) or {}
+        file_ext = meta.get("file_ext", "pdf")
+        is_pdf = file_ext == "pdf"
+        source_path = AudiobookStore.source_file_path(book_id, file_ext)
 
-        # Cover (idempotent)
-        await loop.run_in_executor(cls._executor, PDFExtractor.render_cover, book_id)
+        if is_pdf:
+            page_count = await loop.run_in_executor(
+                cls._executor, PDFExtractor.page_count, source_path
+            )
+            await loop.run_in_executor(cls._executor, PDFExtractor.render_cover, book_id)
+        else:
+            page_count = await loop.run_in_executor(
+                cls._executor, TextExtractor.page_count, source_path
+            )
+            await loop.run_in_executor(cls._executor, TextExtractor.render_cover, book_id)
 
         for n in range(1, page_count + 1):
             cls._check_cancel(book_id)
@@ -313,9 +324,14 @@ class AudiobookService:
                 pass
             out = AudiobookStore.page_raw_path(book_id, n)
             if not os.path.exists(out):
-                await loop.run_in_executor(
-                    cls._executor, PDFExtractor.extract_one, book_id, n
-                )
+                if is_pdf:
+                    await loop.run_in_executor(
+                        cls._executor, PDFExtractor.extract_one, book_id, n
+                    )
+                else:
+                    await loop.run_in_executor(
+                        cls._executor, TextExtractor.extract_one, book_id, n
+                    )
             await AudiobookStore.update_meta(
                 book_id,
                 phase_progress={"page_done": n, "page_total": page_count},
@@ -335,14 +351,19 @@ class AudiobookService:
         await AudiobookStore.update_meta(book_id, status="sectioning")
         cls._emit(book_id, "phase_started", phase="sectioning")
 
+        file_ext = meta.get("file_ext", "pdf")
         page_count = int(meta.get("page_count") or 0)
         loop = asyncio.get_running_loop()
 
         # Path A: try the PDF's own outline first (no API call needed).
-        pdf_path = AudiobookStore.pdf_path(book_id)
-        outline = await loop.run_in_executor(
-            cls._executor, PDFExtractor.read_outline, pdf_path
-        )
+        # For non-PDF files there is no outline; skip straight to Gemini.
+        if file_ext == "pdf":
+            source_path = AudiobookStore.source_file_path(book_id, file_ext)
+            outline = await loop.run_in_executor(
+                cls._executor, PDFExtractor.read_outline, source_path
+            )
+        else:
+            outline = None
 
         sections: list[dict] = []
         if outline:
@@ -413,6 +434,8 @@ class AudiobookService:
         cls._emit(book_id, "phase_started", phase="cleaning")
 
         meta = AudiobookStore.read_meta(book_id) or {}
+        file_ext = meta.get("file_ext", "pdf")
+        is_pdf = file_ext == "pdf"
         page_count = int(meta.get("page_count") or 0)
         failed: list[int] = list(meta.get("failed_pages") or [])
 
@@ -444,13 +467,13 @@ class AudiobookService:
                     raw_text = f.read()
 
                 try:
-                    if len(raw_text.strip()) < _OCR_TEXT_THRESHOLD:
-                        # Image page — render and OCR+clean via Gemini vision.
-                        pdf_path = AudiobookStore.pdf_path(book_id)
+                    if is_pdf and len(raw_text.strip()) < _OCR_TEXT_THRESHOLD:
+                        # Image page (PDF only) — render and OCR+clean via Gemini vision.
+                        source_path = AudiobookStore.source_file_path(book_id, file_ext)
                         image_bytes = await asyncio.get_running_loop().run_in_executor(
                             cls._executor,
                             PDFExtractor.render_page_image,
-                            pdf_path,
+                            source_path,
                             n,
                         )
                         cleaned = await GeminiCleaner.ocr_page(api_key, image_bytes)

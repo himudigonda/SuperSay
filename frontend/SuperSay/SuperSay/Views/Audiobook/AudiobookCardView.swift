@@ -58,7 +58,9 @@ struct AudiobookCardView: View {
 
     private var prettyTitle: String {
         var t = book.title
-        if t.lowercased().hasSuffix(".pdf") { t = String(t.dropLast(4)) }
+        for ext in [".pdf", ".docx", ".txt", ".md"] {
+            if t.lowercased().hasSuffix(ext) { return String(t.dropLast(ext.count)) }
+        }
         return t
     }
 

@@ -751,12 +751,13 @@ def test_upload_rejects_empty_pdf():
     assert "empty" in response.json()["detail"].lower()
 
 
-def test_upload_rejects_non_pdf_filename():
+def test_upload_rejects_unsupported_extension():
+    """Only PDF, TXT, DOCX, and MD are accepted; everything else must return 400."""
     from app.main import app
     from fastapi.testclient import TestClient
 
     client = TestClient(app)
-    files = {"file": ("test.txt", b"plain text", "text/plain")}
+    files = {"file": ("test.exe", b"binary data", "application/octet-stream")}
     response = client.post("/audiobook", files=files)
     assert response.status_code == 400
 

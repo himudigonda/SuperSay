@@ -9,6 +9,7 @@ from app.services.audiobook_store import AudiobookStore
 from app.services.engine_manager import EngineManager
 from app.services.gemini_cleaner import GeminiCleaner
 from app.services.pdf_extractor import PDFExtractor
+from app.services.text_extractor import TextExtractor
 from app.services.tts import interactive_tts_lock
 from fastapi import (
     APIRouter,
@@ -170,6 +171,9 @@ class VerifyKeyRequest(BaseModel):
 # Configurable cost-cap threshold; warn (don't block) above this estimated USD.
 COST_WARNING_THRESHOLD_USD = 1.00
 
+# File types accepted at upload.
+_ALLOWED_EXTENSIONS = {"pdf", "txt", "docx", "md"}
+
 
 @router.post("/audiobook", response_model=AudiobookEstimate)
 async def upload_audiobook(
@@ -178,63 +182,82 @@ async def upload_audiobook(
     speed: Optional[float] = Form(default=None),
     engine: Optional[str] = Form(default=None),
 ):
-    """Save the uploaded PDF, extract estimate, return book_id + stats. No processing yet.
+    """Save the uploaded file, extract estimate, return book_id + stats. No processing yet.
 
-    Optional `voice`, `speed`, `engine` form fields snapshot the user's current
-    selection for this book. If omitted, falls back to the engine's default.
+    Accepts PDF, TXT, DOCX, and MD files. Optional `voice`, `speed`, `engine`
+    form fields snapshot the user's current selection for this book.
     """
-    if not file.filename or not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    filename = file.filename or "Untitled"
+    file_ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if file_ext not in _ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail="Only PDF, TXT, DOCX, and MD files are supported.",
+        )
 
     content = await file.read()
     if not content:
-        raise HTTPException(status_code=400, detail="The uploaded PDF is empty.")
-    if len(content) < 100:
-        # A real PDF starts with '%PDF-' and has at least a header + xref.
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    if file_ext == "pdf" and len(content) < 100:
         raise HTTPException(
             status_code=400, detail="The uploaded file is too small to be a valid PDF."
         )
-    title = file.filename or "Untitled.pdf"
+    title = filename
 
     book_id = AudiobookStore.create_book(title)
     # Wrap everything after book creation so any unexpected failure cleans up
     # the directory and never leaves an orphan row in the DB.
     try:
-        AudiobookStore.save_pdf(book_id, content)
+        AudiobookStore.save_source(book_id, content, file_ext)
 
-        pdf_path = AudiobookStore.pdf_path(book_id)
+        source_path = AudiobookStore.source_file_path(book_id, file_ext)
         loop = asyncio.get_running_loop()
 
-        try:
-            page_count = await loop.run_in_executor(None, PDFExtractor.page_count, pdf_path)
-            is_image_only = await loop.run_in_executor(
-                None, PDFExtractor.is_image_only, pdf_path
-            )
-        except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}") from e
+        is_pdf = file_ext == "pdf"
 
-        # P9: reject zero-page PDFs early — the pipeline would "complete" instantly
-        # with no audio, leaving the user confused. Delete the staged book before
-        # returning the error so it doesn't appear in the library.
+        try:
+            if is_pdf:
+                page_count = await loop.run_in_executor(
+                    None, PDFExtractor.page_count, source_path
+                )
+                is_image_only = await loop.run_in_executor(
+                    None, PDFExtractor.is_image_only, source_path
+                )
+            else:
+                page_count = await loop.run_in_executor(
+                    None, TextExtractor.page_count, source_path
+                )
+                is_image_only = False
+        except Exception as e:
+            raise HTTPException(
+                status_code=400, detail=f"Could not read file: {e}"
+            ) from e
+
+        # P9: reject zero-page / zero-content files early.
         if page_count == 0:
             raise HTTPException(
                 status_code=400,
-                detail="This PDF has no extractable pages. Try a different file.",
+                detail="This file has no extractable content. Try a different file.",
             )
 
-        # Image-only books are processed via Gemini vision OCR — no rejection.
-        # Substitute a per-page character estimate for the cost/duration calculation
-        # since text extraction returns nothing useful for scanned pages.
+        # Image-only PDFs → substitute per-page estimate; text files always have text.
         _OCR_CHARS_PER_PAGE = 1500  # ~250 words × 6 chars/word
         if is_image_only:
             sample_words = 250
             sample_chars = _OCR_CHARS_PER_PAGE
-        else:
+        elif is_pdf:
             sample_words = await loop.run_in_executor(
-                None, PDFExtractor.sample_word_count, pdf_path
+                None, PDFExtractor.sample_word_count, source_path
             )
             sample_chars = await loop.run_in_executor(
-                None, PDFExtractor.sample_char_count, pdf_path
+                None, PDFExtractor.sample_char_count, source_path
+            )
+        else:
+            sample_words = await loop.run_in_executor(
+                None, TextExtractor.sample_word_count, source_path
+            )
+            sample_chars = await loop.run_in_executor(
+                None, TextExtractor.sample_char_count, source_path
             )
 
         book_speed = float(speed) if speed is not None else 1.0
@@ -244,7 +267,9 @@ async def upload_audiobook(
             sample_chars=sample_chars,
             speed=book_speed,
         )
-        estimate["token_count"] = GeminiCleaner.estimate_tokens(sample_chars * page_count)
+        estimate["token_count"] = GeminiCleaner.estimate_tokens(
+            sample_chars * page_count
+        )
 
         state = EngineManager.state()
         book_engine = engine or state.get("engine", "kokoro")
@@ -262,6 +287,7 @@ async def upload_audiobook(
             speed=book_speed,
             estimated=estimate,
         )
+        meta["file_ext"] = file_ext
         AudiobookStore.write_meta(book_id, meta)
 
         # Render cover in background — scheduled AFTER write_meta so that if this
@@ -272,7 +298,10 @@ async def upload_audiobook(
         # (/cover returns 404 until ready; "failed" means stop retrying).
         async def _bg_render_cover() -> None:
             try:
-                await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
+                if is_pdf:
+                    await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
+                else:
+                    await loop.run_in_executor(None, TextExtractor.render_cover, book_id)
                 await AudiobookStore.update_meta(book_id, cover_status="ready")
             except Exception as e:
                 print(f"[API] cover render failed for {book_id}: {e}")

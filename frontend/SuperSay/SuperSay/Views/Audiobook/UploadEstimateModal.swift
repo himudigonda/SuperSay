@@ -168,7 +168,7 @@ struct UploadEstimateModal: View {
     private var loadingState: some View {
         VStack(spacing: 16) {
             ProgressView().tint(.cyan)
-            Text("Reading your PDF...")
+            Text("Reading your file...")
                 .font(vm.appFont(size: 13))
                 .foregroundStyle(.secondary)
         }
@@ -180,7 +180,7 @@ struct UploadEstimateModal: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 32))
                 .foregroundStyle(.red)
-            Text(bookVM.loadingError ?? "Could not read this PDF.")
+            Text(bookVM.loadingError ?? "Could not read this file.")
                 .font(vm.appFont(size: 13))
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -191,7 +191,9 @@ struct UploadEstimateModal: View {
 
     private var prettyTitle: String {
         let n = pdfURL.lastPathComponent
-        if n.lowercased().hasSuffix(".pdf") { return String(n.dropLast(4)) }
+        for ext in [".pdf", ".docx", ".txt", ".md"] {
+            if n.lowercased().hasSuffix(ext) { return String(n.dropLast(ext.count)) }
+        }
         return n
     }
 
