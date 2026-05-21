@@ -13,6 +13,17 @@ struct AudiobookCardView: View {
         bookVM.processingState[book.bookID] ?? book.displayStatus
     }
 
+    /// Live progress fraction derived from SSE state, falling back to book model.
+    private var progressFraction: Double {
+        switch status {
+        case .extracting(let p, let t), .cleaning(let p, let t), .generating(let p, let t):
+            guard t > 0 else { return 0 }
+            return Double(p) / Double(t)
+        default:
+            return book.progressFraction
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             cover
@@ -158,7 +169,7 @@ struct AudiobookCardView: View {
 
     @ViewBuilder
     private var progressRing: some View {
-        let pct = book.progressFraction
+        let pct = progressFraction
         ZStack {
             Circle()
                 .fill(.ultraThinMaterial)
