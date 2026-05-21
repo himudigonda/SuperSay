@@ -237,7 +237,9 @@ def test_write_wav_correct_header(tmp_path):
 def test_write_wav_file_size_exact(tmp_path):
     n_samples = 7200
     path = str(tmp_path / "sz.wav")
-    AudiobookService._write_wav_from_samples(path, np.zeros(n_samples, dtype=np.float32))
+    AudiobookService._write_wav_from_samples(
+        path, np.zeros(n_samples, dtype=np.float32)
+    )
     expected = WAV_HEADER_SIZE + n_samples * BYTES_PER_SAMPLE
     assert os.path.getsize(path) == expected
 
@@ -321,7 +323,9 @@ async def test_concat_pcm_is_exact_byte_concat():
 
     await AudiobookService._phase_concat(bid, AudiobookStore.read_meta(bid))
     actual_pcm = _read_pcm_body(AudiobookStore.audio_path(bid))
-    assert actual_pcm == expected_pcm, "PCM body mismatch — concat reordered or corrupted bytes"
+    assert (
+        actual_pcm == expected_pcm
+    ), "PCM body mismatch — concat reordered or corrupted bytes"
 
 
 @pytest.mark.asyncio
@@ -487,9 +491,15 @@ async def test_tts_phase_writes_valid_wavs(monkeypatch):
             f.write(f"Page {n}.")
 
     with (
-        patch("app.services.audiobook_service.EngineManager.ensure_loaded", new=AsyncMock()),
+        patch(
+            "app.services.audiobook_service.EngineManager.ensure_loaded",
+            new=AsyncMock(),
+        ),
         patch("app.services.audiobook_service.EngineManager.touch"),
-        patch("app.services.audiobook_service.EngineManager.generate", side_effect=_mock_generate),
+        patch(
+            "app.services.audiobook_service.EngineManager.generate",
+            side_effect=_mock_generate,
+        ),
     ):
         await AudiobookService._phase_tts(bid, AudiobookStore.read_meta(bid))
 
@@ -524,9 +534,15 @@ async def test_tts_blank_page_writes_silence(monkeypatch):
         yield np.zeros(100, dtype=np.float32)
 
     with (
-        patch("app.services.audiobook_service.EngineManager.ensure_loaded", new=AsyncMock()),
+        patch(
+            "app.services.audiobook_service.EngineManager.ensure_loaded",
+            new=AsyncMock(),
+        ),
         patch("app.services.audiobook_service.EngineManager.touch"),
-        patch("app.services.audiobook_service.EngineManager.generate", side_effect=counting_generate),
+        patch(
+            "app.services.audiobook_service.EngineManager.generate",
+            side_effect=counting_generate,
+        ),
     ):
         await AudiobookService._phase_tts(bid, AudiobookStore.read_meta(bid))
 
@@ -556,9 +572,15 @@ async def test_tts_failure_writes_silence_and_records_failed_page(monkeypatch):
         yield np.zeros(100, dtype=np.float32)
 
     with (
-        patch("app.services.audiobook_service.EngineManager.ensure_loaded", new=AsyncMock()),
+        patch(
+            "app.services.audiobook_service.EngineManager.ensure_loaded",
+            new=AsyncMock(),
+        ),
         patch("app.services.audiobook_service.EngineManager.touch"),
-        patch("app.services.audiobook_service.EngineManager.generate", side_effect=flaky_generate),
+        patch(
+            "app.services.audiobook_service.EngineManager.generate",
+            side_effect=flaky_generate,
+        ),
     ):
         await AudiobookService._phase_tts(bid, AudiobookStore.read_meta(bid))
 
@@ -601,6 +623,7 @@ async def test_end_to_end_pipeline_produces_valid_wav(monkeypatch):
             freq = 220 * page_num
             t = np.linspace(0, 0.1, int(0.1 * SAMPLE_RATE), endpoint=False)
             yield (np.sin(2 * np.pi * freq * t) * 0.5).astype(np.float32)
+
         return _gen
 
     call_tracker = [0]
@@ -612,9 +635,15 @@ async def test_end_to_end_pipeline_produces_valid_wav(monkeypatch):
         yield (np.sin(2 * np.pi * freq * t) * 0.5).astype(np.float32)
 
     with (
-        patch("app.services.audiobook_service.EngineManager.ensure_loaded", new=AsyncMock()),
+        patch(
+            "app.services.audiobook_service.EngineManager.ensure_loaded",
+            new=AsyncMock(),
+        ),
         patch("app.services.audiobook_service.EngineManager.touch"),
-        patch("app.services.audiobook_service.EngineManager.generate", side_effect=rotating_generate),
+        patch(
+            "app.services.audiobook_service.EngineManager.generate",
+            side_effect=rotating_generate,
+        ),
     ):
         await AudiobookService._phase_tts(bid, meta)
 
@@ -760,7 +789,9 @@ async def test_real_pipeline_produces_correct_transcript():
 
     # Both pages produced non-silent audio
     for n in (1, 2):
-        pcm = np.frombuffer(_read_pcm_body(AudiobookStore.page_audio_path(bid, n)), dtype="<i2")
+        pcm = np.frombuffer(
+            _read_pcm_body(AudiobookStore.page_audio_path(bid, n)), dtype="<i2"
+        )
         rms = np.sqrt(np.mean(pcm.astype(np.float32) ** 2))
         assert rms > 50, f"Page {n} RMS {rms:.1f} — sounds like silence"
 
