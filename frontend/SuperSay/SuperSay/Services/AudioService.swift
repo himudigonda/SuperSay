@@ -382,7 +382,12 @@ class AudioService: NSObject, ObservableObject {
         isStreamActive = false
         hasStrippedHeader = true
 
-        let file = try AVAudioFile(forReading: url)
+        // AVAudioFile(forReading:) sets processingFormat to Float32 regardless of
+        // the file's on-disk format. Our player node is connected with Int16, so
+        // scheduling Float32 buffers reinterprets the bit patterns as Int16 and
+        // produces pure noise. Force Int16 processing format to match the
+        // connection format and avoid the mismatch.
+        let file = try AVAudioFile(forReading: url, commonFormat: .pcmFormatInt16, interleaved: false)
         currentAudioFile = file
         audiobookSampleRate = file.processingFormat.sampleRate
         audiobookTotalFrames = file.length
