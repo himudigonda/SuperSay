@@ -44,6 +44,8 @@ struct Audiobook: Identifiable, Codable, Hashable {
             return .needsKey
         case "failed":
             return .failed(reason: error ?? "Unknown error")
+        case "cancelled":
+            return .cancelled
         default:
             return .queued
         }
@@ -158,6 +160,7 @@ enum ProcessingStatus: Hashable {
     case ready
     case needsKey
     case failed(reason: String)
+    case cancelled
 
     var isProcessing: Bool {
         switch self {
@@ -180,6 +183,7 @@ enum ProcessingStatus: Hashable {
         case .ready: return "READY"
         case .needsKey: return "NEEDS KEY — RESUME"
         case .failed: return "FAILED — TAP TO RETRY"
+        case .cancelled: return "CANCELLED — CLICK TO RESTART"
         }
     }
 }

@@ -161,7 +161,7 @@ class AudiobookService:
         # in those states the pipeline never reached the per-page retry stage
         # (e.g., user re-entered API key after restart). Without this guard,
         # the resume button is a silent no-op (C2).
-        resumable_states = {"failed", "needs_key"}
+        resumable_states = {"failed", "needs_key", "cancelled"}
         if not failed and status not in resumable_states:
             return 0
         for n in failed:
@@ -276,9 +276,9 @@ class AudiobookService:
             cls._emit(book_id, "done", actual=actual)
         except AudiobookCancelled:
             await AudiobookStore.update_meta(
-                book_id, status="failed", error="Cancelled by user."
+                book_id, status="cancelled", error="Cancelled by user."
             )
-            cls._emit(book_id, "failed", error="Cancelled by user.")
+            cls._emit(book_id, "cancelled", error="Cancelled by user.")
         except GeminiAuthError as e:
             await AudiobookStore.update_meta(
                 book_id,

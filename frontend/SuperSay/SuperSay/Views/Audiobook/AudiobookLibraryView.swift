@@ -214,6 +214,7 @@ struct AudiobookLibraryView: View {
         switch book.displayStatus {
         case .ready: openPlayer(book)
         case .failed: bookVM.retry(book)
+        case .cancelled: bookVM.retry(book)
         case .needsKey: bookVM.resumeNeedsKey(book)
         default:
             // Processing — clicking through is a no-op for now (future: progress drawer).

@@ -264,7 +264,7 @@ final class AudiobookViewModel: ObservableObject {
                     }
                     sseTasks[bookID] = nil
                     break
-                } else if type == "failed" {
+                } else if type == "failed" || type == "cancelled" {
                     await refresh()
                     sseTasks[bookID] = nil
                     break
@@ -303,6 +303,7 @@ final class AudiobookViewModel: ObservableObject {
         case "done": s = .ready
         case "needs_key": s = .needsKey
         case "failed": s = .failed(reason: error ?? "Unknown error")
+        case "cancelled": s = .cancelled
         default: s = .queued
         }
         processingState[bookID] = s

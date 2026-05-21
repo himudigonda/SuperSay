@@ -44,6 +44,12 @@ struct AudiobookCardView: View {
                 }
                 Divider()
             }
+            if case .cancelled = status {
+                Button { bookVM.retry(book) } label: {
+                    Label("Restart", systemImage: "arrow.clockwise")
+                }
+                Divider()
+            }
             if case .needsKey = status {
                 Button { bookVM.resumeNeedsKey(book) } label: {
                     Label("Resume", systemImage: "play.fill")
@@ -143,6 +149,8 @@ struct AudiobookCardView: View {
             cornerBadge(systemName: "key.fill", color: .yellow)
         case .failed:
             cornerBadge(systemName: "exclamationmark.triangle.fill", color: .red)
+        case .cancelled:
+            cornerBadge(systemName: "stop.circle.fill", color: .secondary)
         case .ready:
             EmptyView()
         }
@@ -210,6 +218,11 @@ struct AudiobookCardView: View {
                 .font(vm.appFont(size: 9, weight: .black))
                 .kerning(1)
                 .foregroundStyle(.red)
+        case .cancelled:
+            Text(status.caption)
+                .font(vm.appFont(size: 9, weight: .black))
+                .kerning(1)
+                .foregroundStyle(.secondary)
         case .needsKey:
             Text(status.caption)
                 .font(vm.appFont(size: 9, weight: .black))
