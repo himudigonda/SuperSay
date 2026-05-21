@@ -290,6 +290,7 @@ class AudioService: NSObject, ObservableObject {
     }
 
     func stop() {
+        audiobookGeneration += 1  // invalidate any in-flight completion handlers
         playerNode.stop()
         timer?.cancel()
         isPlaying = false
@@ -371,6 +372,8 @@ class AudioService: NSObject, ObservableObject {
     private static let audiobookChunkSeconds: Double = 30
     /// Number of pre-scheduled chunks ahead of the current play head.
     private static let audiobookChunkLookahead: Int = 2
+    /// Incremented on every seek/stop to invalidate stale completion handlers.
+    private var audiobookGeneration: Int = 0
 
     /// Open a local WAV file and start chunked playback from frame 0.
     func loadAndPlayWAV(at url: URL) throws {
@@ -441,9 +444,10 @@ class AudioService: NSObject, ObservableObject {
         audiobookFrameOffset += AVAudioFramePosition(buffer.frameLength)
 
         scheduledBufferCount += 1
+        let gen = audiobookGeneration  // capture before the async hop
         playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
+                guard let self, gen == self.audiobookGeneration else { return }
                 scheduledBufferCount -= 1
                 // Refill: keep the lookahead window full as long as we have file left.
                 if currentAudioFile != nil, audiobookFrameOffset < audiobookTotalFrames {
@@ -466,6 +470,8 @@ class AudioService: NSObject, ObservableObject {
             seek(to: max(0, min(1, seconds / max(0.01, duration))))
             return
         }
+        let wasPlaying = isPlaying
+        audiobookGeneration += 1  // invalidate stale handlers before stop fires them
         playerNode.stop()
         scheduledBufferCount = 0
         let target = max(0, min(audiobookTotalFrames, AVAudioFramePosition(seconds * audiobookSampleRate)))
@@ -476,9 +482,13 @@ class AudioService: NSObject, ObservableObject {
             scheduleNextAudiobookChunk()
         }
         if !engine.isRunning { try? engine.start() }
-        playerNode.play()
-        isPlaying = true
-        startTimer()
+        if wasPlaying {
+            playerNode.play()
+            isPlaying = true
+            startTimer()
+        } else {
+            isPlaying = false
+        }
     }
 
     func exportToDesktop() {

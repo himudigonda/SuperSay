@@ -69,6 +69,12 @@ class AudiobookService:
             cls._worker_task = asyncio.create_task(cls._worker_loop())
 
     @classmethod
+    def shutdown(cls) -> None:
+        if cls._executor is not None:
+            cls._executor.shutdown(wait=False, cancel_futures=True)
+            cls._executor = None
+
+    @classmethod
     async def _worker_loop(cls) -> None:
         assert cls._queue is not None
         while True:
@@ -481,9 +487,23 @@ class AudiobookService:
                             source_path,
                             n,
                         )
-                        cleaned = await GeminiCleaner.ocr_page(api_key, image_bytes)
+                        try:
+                            cleaned = await asyncio.wait_for(
+                                GeminiCleaner.ocr_page(api_key, image_bytes),
+                                timeout=90.0,
+                            )
+                        except asyncio.TimeoutError:
+                            print(f"[Audiobook] {book_id} page {n} Gemini OCR timeout, using raw text")
+                            cleaned = raw_text or "-"
                     else:
-                        cleaned = await GeminiCleaner.clean_page(api_key, raw_text)
+                        try:
+                            cleaned = await asyncio.wait_for(
+                                GeminiCleaner.clean_page(api_key, raw_text),
+                                timeout=90.0,
+                            )
+                        except asyncio.TimeoutError:
+                            print(f"[Audiobook] {book_id} page {n} Gemini clean timeout, using raw text")
+                            cleaned = raw_text or "-"
                 except GeminiAuthError:
                     raise
                 except Exception as e:

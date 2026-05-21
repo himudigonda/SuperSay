@@ -71,7 +71,8 @@ async def lifespan(app: FastAPI):
     asyncio.create_task(_parent_watchdog())
 
     yield
-    # Shutdown (if needed)
+    # Clean shutdown: release thread pool so no zombie workers linger.
+    AudiobookService.shutdown()
 
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)

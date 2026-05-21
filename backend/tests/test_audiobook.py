@@ -856,3 +856,108 @@ async def test_clean_phase_uses_ocr_for_image_pages(monkeypatch):
 
     assert len(ocr_calls) == 1, "image page should route to OCR"
     assert len(clean_calls) == 1, "text page should route to clean_page"
+
+
+# ---------- TXT extraction (non-PDF path) ----------
+
+
+@pytest.mark.asyncio
+async def test_txt_file_extraction_does_not_call_pdf_extractor(monkeypatch):
+    """Uploading a .txt file must route through TextExtractor, not PDFExtractor.
+
+    Regression guard: before the TextExtractor path was added, any non-PDF
+    upload crashed in the extract phase because PDFExtractor.page_count tried
+    to open the file as a PDF.
+    """
+    from app.services import audiobook_service as _svc
+    from app.services import text_extractor as _te
+    from app.services import pdf_extractor as _pe
+
+    bid = AudiobookStore.create_book("sample.txt")
+    # Write meta with file_ext=txt so the pipeline routes correctly.
+    # page_count=1 matches the single-page content we write below.
+    meta = AudiobookStore.initial_meta(
+        bid, "sample.txt", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+    )
+    meta["file_ext"] = "txt"
+    AudiobookStore.write_meta(bid, meta)
+
+    # Write a real source file so TextExtractor can open it.
+    source_path = AudiobookStore.source_file_path(bid, "txt")
+    os.makedirs(os.path.dirname(source_path), exist_ok=True)
+    with open(source_path, "w", encoding="utf-8") as f:
+        f.write("Hello world.\n\nThis is page one.\n\nThis is page two.")
+
+    pdf_calls: list[str] = []
+
+    def _fail_if_called(*args, **kwargs):
+        pdf_calls.append("called")
+        raise AssertionError("PDFExtractor must NOT be called for a .txt file")
+
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "page_count", classmethod(lambda cls, p: _fail_if_called(p))
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b: _fail_if_called(b))
+    )
+
+    # Reset AudiobookService state so initialize() creates fresh objects in the
+    # current event loop (avoids "bound to a different event loop" errors when
+    # multiple async tests share the singleton).
+    _svc.AudiobookService._queue = None
+    _svc.AudiobookService._worker_task = None
+    _svc.AudiobookService.initialize()
+
+    await _svc.AudiobookService._phase_extract(bid)
+
+    assert len(pdf_calls) == 0, "PDFExtractor was called for a TXT file"
+
+    # _phase_extract does not update meta["page_count"] (that is set at upload time).
+    # Instead verify that the per-page raw text file was actually written to disk.
+    page1 = AudiobookStore.page_raw_path(bid, 1)
+    assert os.path.exists(page1), "page 1 raw text file must exist after extraction"
+    with open(page1, encoding="utf-8") as f:
+        content = f.read()
+    assert len(content) > 0, "extracted page should be non-empty"
+
+
+# ---------- Gemini timeout → raw text fallback ----------
+
+
+@pytest.mark.asyncio
+async def test_gemini_timeout_falls_back_to_raw_text(monkeypatch):
+    """When GeminiCleaner.clean_page raises asyncio.TimeoutError the pipeline
+    must degrade gracefully: the cleaned output file is written with the raw
+    text so downstream TTS can still proceed.  No hang, no crash, no empty file.
+    """
+    from app.services import audiobook_service as _svc
+    from app.services import gemini_cleaner as _gc
+
+    bid = AudiobookStore.create_book("Test.pdf")
+    meta = AudiobookStore.initial_meta(
+        bid, "Test.pdf", 1, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+    )
+    AudiobookStore.write_meta(bid, meta)
+
+    raw_text = "Raw page text that should survive the Gemini timeout."
+    raw_path = AudiobookStore.page_raw_path(bid, 1)
+    os.makedirs(os.path.dirname(raw_path), exist_ok=True)
+    with open(raw_path, "w", encoding="utf-8") as f:
+        f.write(raw_text)
+
+    async def _timeout_clean(api_key, text):
+        raise asyncio.TimeoutError()
+
+    monkeypatch.setattr(
+        _gc.GeminiCleaner, "clean_page", AsyncMock(side_effect=_timeout_clean)
+    )
+
+    _svc.AudiobookService.initialize()
+    # Must complete without raising, even though Gemini timed out.
+    await _svc.AudiobookService._phase_clean(bid, api_key="test-key")
+
+    clean_path = AudiobookStore.page_clean_path(bid, 1)
+    assert os.path.exists(clean_path), "clean file must exist after timeout fallback"
+    with open(clean_path, encoding="utf-8") as f:
+        result = f.read()
+    assert result == raw_text, "fallback content must equal the original raw text"

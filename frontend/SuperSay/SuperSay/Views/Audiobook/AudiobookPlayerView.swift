@@ -5,12 +5,12 @@ struct AudiobookPlayerView: View {
     @EnvironmentObject var vm: DashboardViewModel
     @EnvironmentObject var bookVM: AudiobookViewModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     let book: Audiobook
     @State private var localScrub: Double = 0
     @State private var dragging = false
     @State private var playerSpeed: Double = 1.0
-    @State private var bars: [CGFloat] = (0..<64).map { _ in CGFloat.random(in: 6...30) }
     @State private var transcriptOpen = false
     @State private var ticker = Date()
     @State private var dominantColor: Color = .cyan
@@ -76,17 +76,14 @@ struct AudiobookPlayerView: View {
 
     private var background: some View {
         ZStack {
-            LinearGradient(
-                colors: [.black, Color(white: 0.10)],
-                startPoint: .top, endPoint: .bottom
-            )
+            Color(.windowBackgroundColor)
             Circle()
-                .fill(dominantColor.opacity(0.32))
+                .fill(dominantColor.opacity(colorScheme == .dark ? 0.32 : 0.14))
                 .frame(width: 450, height: 450)
                 .blur(radius: 120)
                 .offset(x: -180, y: -120)
             Circle()
-                .fill(dominantColor.opacity(0.22))
+                .fill(dominantColor.opacity(colorScheme == .dark ? 0.22 : 0.10))
                 .frame(width: 360, height: 360)
                 .blur(radius: 100)
                 .offset(x: 220, y: 220)
@@ -113,7 +110,11 @@ struct AudiobookPlayerView: View {
                 .frame(width: 240, height: 336)
                 .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             }
-            .shadow(color: .black.opacity(0.45), radius: 30, y: 16)
+            .shadow(
+                color: bookVM.audio.isPlaying ? dominantColor.opacity(0.45) : .black.opacity(0.45),
+                radius: bookVM.audio.isPlaying ? 42 : 30,
+                y: bookVM.audio.isPlaying ? 20 : 16
+            )
             .scaleEffect(bookVM.audio.isPlaying ? 1.0 : 0.97)
             .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: bookVM.audio.isPlaying)
 
@@ -124,7 +125,7 @@ struct AudiobookPlayerView: View {
                     .foregroundStyle(.cyan)
                 Text(prettyTitle)
                     .font(vm.appFont(size: 22, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .lineLimit(2)
                     .frame(width: 240, alignment: .leading)
             }
@@ -141,58 +142,73 @@ struct AudiobookPlayerView: View {
     // MARK: - Center column
 
     private var centerColumn: some View {
-        VStack(spacing: 22) {
-            scrubberSection
-            transportSection
-            speedAndSleep
-            if transcriptOpen { transcriptPanel }
-            transcriptToggle
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
+            VStack(spacing: 28) {
+                scrubberSection
+                transportSection
+            }
+            Spacer(minLength: 0)
+            VStack(spacing: 0) {
+                speedAndSleep
+                if transcriptOpen {
+                    transcriptPanel
+                        .padding(.top, 16)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                }
+                transcriptToggle
+                    .padding(.top, 10)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var scrubberSection: some View {
         VStack(spacing: 10) {
-            ZStack {
-                HStack(spacing: 3) {
-                    let progress = displayProgress
-                    ForEach(0..<bars.count, id: \.self) { i in
-                        let isFilled = Double(i) / Double(bars.count) <= progress
-                        RoundedRectangle(cornerRadius: 1.5, style: .continuous)
-                            .fill(isFilled ? Color.cyan : Color.white.opacity(0.12))
-                            .frame(width: 3, height: bars[i])
-                    }
-                }
-                .frame(height: 36)
-
-                // Section markers overlaid on the scrubber.
-                GeometryReader { geo in
+            // Custom progress bar — explicit 20pt height so no GeometryReader expansion.
+            GeometryReader { geo in
+                let w = geo.size.width
+                let progress = displayProgress
+                ZStack(alignment: .leading) {
+                    // Track
+                    Capsule()
+                        .fill(Color.primary.opacity(0.12))
+                        .frame(height: 4)
+                    // Filled portion
+                    Capsule()
+                        .fill(Color.cyan)
+                        .frame(width: max(0, w * progress), height: 4)
+                    // Section-boundary ticks
                     ForEach(book.sections) { section in
-                        let total = book.totalAudioSeconds > 0 ? book.totalAudioSeconds : 1
-                        let x = geo.size.width * (section.startTime / total)
-                        Rectangle()
-                            .fill(.white.opacity(0.4))
-                            .frame(width: 1.5, height: 36)
-                            .position(x: x, y: 18)
+                        let total = max(1.0, book.totalAudioSeconds)
+                        Capsule()
+                            .fill(Color.primary.opacity(0.45))
+                            .frame(width: 2, height: 10)
+                            .offset(x: w * (section.startTime / total) - 1, y: -3)
                     }
+                    // Thumb
+                    Circle()
+                        .fill(Color.white)
+                        .frame(width: 14, height: 14)
+                        .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+                        .overlay(Circle().stroke(Color.primary.opacity(0.12), lineWidth: 0.5))
+                        .offset(x: max(0, w * progress - 7))
                 }
-                .allowsHitTesting(false)
-
-                Slider(value: Binding(
-                    get: { displayProgress },
-                    set: { newVal in
-                        localScrub = newVal
-                        dragging = true
-                    }
-                ), in: 0...1) { editing in
-                    if !editing {
-                        bookVM.seek(percentage: localScrub)
-                        dragging = false
-                    }
-                }
-                .tint(.cyan)
-                .opacity(0.9)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { v in
+                            localScrub = max(0, min(1, v.location.x / w))
+                            dragging = true
+                        }
+                        .onEnded { _ in
+                            bookVM.seek(percentage: localScrub)
+                            dragging = false
+                        }
+                )
             }
+            .frame(height: 20)
 
             HStack {
                 Text(DurationFormatter.clock(bookVM.audio.currentTime))
@@ -210,7 +226,7 @@ struct AudiobookPlayerView: View {
                 Text("-" + DurationFormatter.clock(max(0, bookVM.audio.duration - bookVM.audio.currentTime)))
             }
             .font(vm.appFont(size: 11, weight: .medium).monospaced())
-            .foregroundStyle(.white.opacity(0.6))
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -241,6 +257,8 @@ struct AudiobookPlayerView: View {
         Button { bookVM.togglePlayback() } label: {
             ZStack {
                 Circle().fill(.white).frame(width: 72, height: 72)
+                    .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                    .overlay(Circle().stroke(Color.primary.opacity(0.08), lineWidth: 0.5))
                 Image(systemName: bookVM.audio.isPlaying ? "pause.fill" : "play.fill")
                     .font(.system(size: 26, weight: .black))
                     .foregroundStyle(.black)
@@ -255,9 +273,9 @@ struct AudiobookPlayerView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: 18, weight: .medium))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 44, height: 44)
-                .background(.white.opacity(0.06), in: Circle())
+                .background(Color.primary.opacity(0.06), in: Circle())
         }
         .buttonStyle(.plain)
         .help(help)
@@ -266,14 +284,14 @@ struct AudiobookPlayerView: View {
     private var speedAndSleep: some View {
         HStack(spacing: 16) {
             Menu {
-                ForEach([0.75, 1.0, 1.25, 1.5, 1.75, 2.0], id: \.self) { s in
-                    Button(String(format: "%.2fx", s)) {
+                ForEach([0.75, 1.0, 1.25, 1.5, 1.75, 2.0] as [Double], id: \.self) { s in
+                    Button(String(format: "%.2gx", s)) {
                         playerSpeed = s
                         bookVM.defaultBookSpeed = s
                     }
                 }
             } label: {
-                Text(String(format: "%.2fx", playerSpeed))
+                Text(String(format: "%.2gx", playerSpeed))
                     .font(vm.appFont(size: 12, weight: .bold).monospaced())
                     .foregroundStyle(.cyan)
                     .padding(.horizontal, 14)
@@ -286,7 +304,7 @@ struct AudiobookPlayerView: View {
 
             HStack(spacing: 8) {
                 Image(systemName: bookVM.audio.volume < 0.05 ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
                     .font(.system(size: 12))
                 Slider(value: Binding(
                     get: { Double(bookVM.audio.volume) },
@@ -343,13 +361,21 @@ struct AudiobookPlayerView: View {
             withAnimation(.easeInOut(duration: 0.3)) { transcriptOpen.toggle() }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "text.alignleft")
+                Image(systemName: transcriptOpen ? "chevron.up.circle" : "text.alignleft")
+                    .font(.system(size: 12, weight: .medium))
                 Text(transcriptOpen ? "Hide Transcript" : "Show Transcript")
                     .font(vm.appFont(size: 11, weight: .bold))
             }
-            .foregroundStyle(.white.opacity(0.7))
+            .foregroundStyle(transcriptOpen ? Color.cyan : Color.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .stroke(transcriptOpen ? Color.cyan.opacity(0.5) : Color.primary.opacity(0.15), lineWidth: 1)
+            )
         }
         .buttonStyle(.plain)
+        .animation(.easeInOut(duration: 0.2), value: transcriptOpen)
     }
 
     private var transcriptPanel: some View {
@@ -363,7 +389,7 @@ struct AudiobookPlayerView: View {
                                 Text(text)
                                     .id(pageNum)
                                     .font(vm.appFont(size: isCurrent ? 14 : 13, weight: isCurrent ? .bold : .regular))
-                                    .foregroundStyle(isCurrent ? Color.cyan : Color.white.opacity(0.6))
+                                    .foregroundStyle(isCurrent ? Color.cyan : Color.secondary)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                         }
@@ -384,7 +410,7 @@ struct AudiobookPlayerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(.white.opacity(0.06), lineWidth: 1)
+                        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
                 )
             } else {
                 ProgressView().tint(.cyan).padding()
@@ -418,7 +444,7 @@ struct AudiobookPlayerView: View {
                 Text("SECTIONS")
                     .font(vm.appFont(size: 11, weight: .black))
                     .kerning(2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(book.sections.count)")
                     .font(vm.appFont(size: 11, weight: .bold).monospaced())
@@ -427,7 +453,7 @@ struct AudiobookPlayerView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 14)
 
-            Divider().background(.white.opacity(0.08))
+            Divider()
 
             ScrollView {
                 LazyVStack(spacing: 4) {
@@ -438,10 +464,10 @@ struct AudiobookPlayerView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "list.bullet.rectangle")
                                 .font(.system(size: 28))
-                                .foregroundStyle(.white.opacity(0.3))
+                                .foregroundStyle(.tertiary)
                             Text("No sections")
                                 .font(vm.appFont(size: 11))
-                                .foregroundStyle(.white.opacity(0.5))
+                                .foregroundStyle(.secondary)
                         }
                         .padding(.top, 60)
                     }
@@ -454,7 +480,7 @@ struct AudiobookPlayerView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(.white.opacity(0.06), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
         )
     }
 
@@ -467,11 +493,11 @@ struct AudiobookPlayerView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(section.title)
                     .font(vm.appFont(size: 12, weight: isCurrent ? .bold : .medium))
-                    .foregroundStyle(isCurrent ? .cyan : .white.opacity(0.85))
+                    .foregroundStyle(isCurrent ? Color.cyan : Color.primary)
                     .lineLimit(2)
                 Text("\(DurationFormatter.clock(section.startTime))  •  pp. \(section.startPage)–\(section.endPage)")
                     .font(vm.appFont(size: 9, weight: .medium).monospaced())
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(.secondary)
             }
             Spacer()
         }

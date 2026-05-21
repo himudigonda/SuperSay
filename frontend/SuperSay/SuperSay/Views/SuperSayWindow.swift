@@ -307,7 +307,7 @@ struct SuperSayWindow: View {
 
     private var globalDropOverlay: some View {
         ZStack {
-            Color.black.opacity(0.35).ignoresSafeArea()
+            Color.primary.opacity(0.18).ignoresSafeArea()
                 .background(.ultraThinMaterial)
             VStack(spacing: 22) {
                 Image(systemName: "arrow.down.doc.fill")
@@ -334,13 +334,7 @@ struct SuperSayWindow: View {
     }
 
     private var adaptiveBackdrop: some View {
-        Group {
-            if vm.appTheme == "dark" || (vm.appTheme == "system" && colorScheme == .dark) {
-                LinearGradient(colors: [Color.black, Color(white: 0.12)], startPoint: .top, endPoint: .bottom)
-            } else {
-                LinearGradient(colors: [Color(white: 0.98), Color(white: 0.92)], startPoint: .top, endPoint: .bottom)
-            }
-        }
-        .ignoresSafeArea()
+        Color(.windowBackgroundColor)
+            .ignoresSafeArea()
     }
 }
