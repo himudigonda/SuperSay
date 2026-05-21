@@ -310,12 +310,16 @@ class AudiobookService:
             page_count = await loop.run_in_executor(
                 cls._executor, PDFExtractor.page_count, source_path
             )
-            await loop.run_in_executor(cls._executor, PDFExtractor.render_cover, book_id)
+            await loop.run_in_executor(
+                cls._executor, PDFExtractor.render_cover, book_id
+            )
         else:
             page_count = await loop.run_in_executor(
                 cls._executor, TextExtractor.page_count, source_path
             )
-            await loop.run_in_executor(cls._executor, TextExtractor.render_cover, book_id)
+            await loop.run_in_executor(
+                cls._executor, TextExtractor.render_cover, book_id
+            )
 
         for n in range(1, page_count + 1):
             cls._check_cancel(book_id)

@@ -144,7 +144,9 @@ class TextExtractor:
         # File-type badge (bottom-right)
         badge_text = f".{file_ext}"
         badge_x, badge_y = 470, 760
-        draw.rectangle([badge_x - 10, badge_y - 6, badge_x + 100, badge_y + 26], fill=(0, 180, 200))
+        draw.rectangle(
+            [badge_x - 10, badge_y - 6, badge_x + 100, badge_y + 26], fill=(0, 180, 200)
+        )
         draw.text((badge_x, badge_y), badge_text, fill=(255, 255, 255))
 
         buf = io.BytesIO()

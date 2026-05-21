@@ -1,3 +1,4 @@
+import ApplicationServices
 import SwiftUI
 
 struct MainDashboardView: View {
@@ -8,6 +9,7 @@ struct MainDashboardView: View {
     // Local state
     @State private var localProgress: Double = 0
     @State private var isEditingSlider = false
+    @State private var hasAccessibilityPermission: Bool = AXIsProcessTrusted()
 
     var body: some View {
         ZStack {
@@ -20,11 +22,49 @@ struct MainDashboardView: View {
 
             VStack(spacing: 0) {
                 headerSection
+                if !hasAccessibilityPermission {
+                    accessibilityBanner
+                }
                 Spacer()
                 visualizerSection
                 Spacer()
                 footerSection
             }
+        }
+        .onAppear { hasAccessibilityPermission = AXIsProcessTrusted() }
+    }
+
+    private var accessibilityBanner: some View {
+        HStack(spacing: 14) {
+            Image(systemName: "hand.raised.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Accessibility Access Required")
+                    .font(vm.appFont(size: 12, weight: .bold))
+                    .foregroundStyle(.primary)
+                Text("SuperSay needs Accessibility permission to read your selected text. Without it, Cmd+Shift+. won't work.")
+                    .font(vm.appFont(size: 11))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer()
+
+            Button("Open Settings") {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.orange)
+            .font(vm.appFont(size: 11, weight: .semibold))
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(Color.orange.opacity(colorScheme == .dark ? 0.12 : 0.08))
+        .overlay(Rectangle().frame(height: 1).foregroundStyle(Color.orange.opacity(0.25)), alignment: .bottom)
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            hasAccessibilityPermission = AXIsProcessTrusted()
         }
     }
 

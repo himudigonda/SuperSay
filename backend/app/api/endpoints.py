@@ -301,7 +301,9 @@ async def upload_audiobook(
                 if is_pdf:
                     await loop.run_in_executor(None, PDFExtractor.render_cover, book_id)
                 else:
-                    await loop.run_in_executor(None, TextExtractor.render_cover, book_id)
+                    await loop.run_in_executor(
+                        None, TextExtractor.render_cover, book_id
+                    )
                 await AudiobookStore.update_meta(book_id, cover_status="ready")
             except Exception as e:
                 print(f"[API] cover render failed for {book_id}: {e}")

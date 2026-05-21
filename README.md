@@ -25,15 +25,28 @@
 
 ---
 
+## 🚀 Quick Start — Run This First
+
+> **Before anything else**, run this one command in Terminal after moving SuperSay to `/Applications`. Without it, macOS will refuse to open the app.
+
+```bash
+xattr -cr /Applications/SuperSay.app
+```
+
+**Why is this safe?**
+macOS Gatekeeper blocks apps that aren't signed with a paid Apple Developer certificate ($99/year). SuperSay is open-source and unsigned — not because it's unsafe, but because it's not distributed through the App Store. This command strips the "quarantine" flag macOS sets on downloaded files. It does not disable Gatekeeper system-wide, bypass any security policy, or grant the app any extra permissions. You can verify the app's full source code in this repository.
+
+After running it, double-click the app normally. macOS will open it without complaint.
+
+---
+
 ## 📖 Table of Contents
 
 - [🎙️ SuperSay](#️-supersay)
+  - [🚀 Quick Start — Run This First](#-quick-start--run-this-first)
   - [📖 Table of Contents](#-table-of-contents)
   - [✨ Key Features](#-key-features)
   - [🏗️ Architecture at a Glance](#️-architecture-at-a-glance)
-  - [⚠️ First-Time Setup (Important)](#️-first-time-setup-important)
-    - [1. Bypass "App is Damaged" (Gatekeeper)](#1-bypass-app-is-damaged-gatekeeper)
-    - [2. Enable "Speak Selection" (Accessibility)](#2-enable-speak-selection-accessibility)
   - [⌨️ Global Shortcuts](#️-global-shortcuts)
   - [🛠 Developer Quickstart](#-developer-quickstart)
   - [📚 Project Documentation](#-project-documentation)
@@ -98,28 +111,6 @@ graph TD
     class API,SS,PI,ST backend
     class ONNX,EP model
 ```
-
----
-
-## ⚠️ First-Time Setup (Important)
-
-Because SuperSay is currently an **Independent, Unsigned** project, macOS Gatekeeper will apply security blocks.
-
-### 1. Bypass "App is Damaged" (Gatekeeper)
-
-Run this command in your Terminal after moving the app to `/Applications`:
-
-```bash
-xattr -cr /Applications/SuperSay.app
-```
-
-### 2. Enable "Speak Selection" (Accessibility)
-
-If the shortcut fails to grab text:
-
-1. Go to **System Settings > Privacy & Security > Accessibility**.
-2. Remove SuperSay with the **minus (-)** button.
-3. Restart SuperSay and grant permission when prompted.
 
 ---
 
