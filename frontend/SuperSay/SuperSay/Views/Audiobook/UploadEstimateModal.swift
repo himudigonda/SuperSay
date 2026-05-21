@@ -133,12 +133,13 @@ struct UploadEstimateModal: View {
                 .buttonStyle(.bordered)
 
                 Button {
-                    // S5: instead of a silent .disabled state, always allow
-                    // the click and route via VM. Missing key surfaces a
-                    // toast and keeps the modal open so user can fix.
                     if bookVM.keyVerified {
+                        // Do NOT call dismiss() here — modal dismisses automatically
+                        // when startProcessing() clears pendingPDF on success.
+                        // Calling dismiss() immediately would race with the async
+                        // /start call: the sheet binding setter fires cancelUpload()
+                        // which deletes the staged book before /start completes.
                         bookVM.startProcessing()
-                        dismiss()
                     } else {
                         bookVM.showToast(
                             "Set a Gemini API key in Preferences first.",
@@ -146,13 +147,24 @@ struct UploadEstimateModal: View {
                         )
                     }
                 } label: {
-                    Label("Start Processing", systemImage: "play.fill")
+                    if bookVM.startingProcessing {
+                        HStack(spacing: 8) {
+                            ProgressView().tint(.white).scaleEffect(0.75)
+                            Text("Starting…")
+                        }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                         .font(vm.appFont(size: 13, weight: .bold))
+                    } else {
+                        Label("Start Processing", systemImage: "play.fill")
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 8)
+                            .font(vm.appFont(size: 13, weight: .bold))
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.cyan)
+                .disabled(bookVM.startingProcessing)
                 .keyboardShortcut(.defaultAction)
             }
         }

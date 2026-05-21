@@ -143,9 +143,10 @@ final class AudiobookService: NSObject, @unchecked Sendable {
         var req = URLRequest(url: url)
         req.httpMethod = "POST"
         req.setValue(apiKey, forHTTPHeaderField: "X-Gemini-Api-Key")
-        let (_, response) = try await URLSession.shared.data(for: req)
+        let (data, response) = try await URLSession.shared.data(for: req)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
-            throw AudiobookServiceError.uploadFailed("Failed to start processing")
+            let detail = (try? JSONDecoder().decode([String: String].self, from: data))?["detail"] ?? "Failed to start processing"
+            throw AudiobookServiceError.uploadFailed(detail)
         }
     }
 
@@ -184,7 +185,8 @@ final class AudiobookService: NSObject, @unchecked Sendable {
                                       let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                                 else { continue }
                                 continuation.yield(obj)
-                                if let type = obj["type"] as? String, type == "done" || type == "failed" {
+                                if let type = obj["type"] as? String,
+                                   type == "done" || type == "failed" || type == "cancelled" {
                                     sawTerminal = true
                                     break
                                 }

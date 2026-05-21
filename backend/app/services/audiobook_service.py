@@ -15,6 +15,7 @@ Sections detection lives in Phase 2.
 
 import asyncio
 import concurrent.futures
+import json
 import os
 import struct
 import time
@@ -514,7 +515,7 @@ class AudiobookService:
                     book_id,
                     "page_done",
                     phase="cleaning",
-                    page=progress["done"],
+                    page=n,
                     total=page_count,
                 )
 
@@ -689,10 +690,8 @@ class AudiobookService:
             }
             tpath = AudiobookStore.transcript_path(book_id)
             tmp = tpath + ".tmp"
-            import json as _json
-
             with open(tmp, "w", encoding="utf-8") as f:
-                _json.dump(transcript, f, ensure_ascii=False)
+                json.dump(transcript, f, ensure_ascii=False)
             os.replace(tmp, tpath)
         except Exception as e:
             print(f"[Audiobook] {book_id} transcript.json write failed: {e}")
@@ -719,13 +718,11 @@ class AudiobookService:
         # plus output tokens (the cleaned text we have on disk now). Strict-preserve
         # means input ≈ output length; we approximate input from cleaned chars too
         # since raw and cleaned char counts are close after stripping headers.
-        from app.services.gemini_cleaner import GeminiCleaner as _GC
-
-        tokens_used = _GC.estimate_tokens(chars_actual) * 2  # input + output
+        tokens_used = GeminiCleaner.estimate_tokens(chars_actual) * 2  # input + output
         # P10: derive cost from actual char count rather than the (potentially
         # missing) estimated.cost_usd in meta, so resumed books still get a
         # correct cost in the completion modal.
-        cost_actual = _GC.estimate_cost_usd(chars_actual)
+        cost_actual = GeminiCleaner.estimate_cost_usd(chars_actual)
         actual = {
             "pages": page_count,
             "words": words_actual,

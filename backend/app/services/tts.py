@@ -27,6 +27,7 @@ class TTSEngine:
 
     # Idle-unload state
     _is_initializing: bool = False
+    _load_event: asyncio.Event = asyncio.Event()
     _last_request_time: float = 0.0
     _IDLE_TIMEOUT: float = 300.0  # seconds of inactivity before unloading (5 min)
 
@@ -51,19 +52,20 @@ class TTSEngine:
         """Reload the model if it was unloaded by the idle watcher.
 
         Safe to call concurrently: if two requests arrive simultaneously while
-        cold, only one load will happen (the second waits for _is_initializing).
+        cold, only one load will happen (the second waits via the asyncio.Event
+        rather than a polling sleep loop).
         asyncio's cooperative scheduling ensures no await between the flag check
         and the flag set, so there's no TOCTOU race.
         """
         if cls._model is not None:
             return
         if cls._is_initializing:
-            # Another coroutine is already loading — wait for it.
-            while cls._is_initializing:
-                await asyncio.sleep(0.05)
+            # Another coroutine is already loading — wait without polling.
+            await cls._load_event.wait()
             return
         # No await between this check and the flag set → atomic in asyncio.
         cls._is_initializing = True
+        cls._load_event.clear()
         try:
             print("[TTS] Cold start: reloading model...")
             loop = asyncio.get_running_loop()
@@ -71,6 +73,7 @@ class TTSEngine:
             print("[TTS] Model reloaded")
         finally:
             cls._is_initializing = False
+            cls._load_event.set()
 
     @classmethod
     def unload(cls) -> None:

@@ -46,6 +46,10 @@ final class AudiobookViewModel: ObservableObject {
     @AppStorage("defaultBookVoice") var defaultBookVoice: String = "af_bella"
     @AppStorage("lastPlayedBookID") var lastPlayedBookID: String = ""
 
+    /// True while the /start network call is in flight; prevents double-tap and
+    /// drives a loading indicator in UploadEstimateModal.
+    @Published var startingProcessing: Bool = false
+
     // Per-book live processing state, keyed by book_id.
     @Published var processingState: [String: ProcessingStatus] = [:]
     private var sseTasks: [String: Task<Void, Never>] = [:]
@@ -172,14 +176,19 @@ final class AudiobookViewModel: ObservableObject {
 
     func startProcessing() {
         guard let est = pendingEstimate else { return }
+        guard !startingProcessing else { return }
         guard let key = KeychainService.get(.geminiAPIKey) else {
             showToast("Set a Gemini API key in Preferences first.", kind: .error)
             return
         }
         let bookID = est.bookID
+        startingProcessing = true
         Task {
+            defer { startingProcessing = false }
             do {
                 try await service.start(bookID, apiKey: key)
+                // Clear pendingPDF/pendingEstimate to collapse the sheet binding → modal
+                // dismisses automatically without calling cancelUpload().
                 pendingPDF = nil
                 pendingEstimate = nil
                 await refresh()
@@ -187,6 +196,10 @@ final class AudiobookViewModel: ObservableObject {
                 flushUploadQueue()
             } catch {
                 showToast(error.localizedDescription, kind: .error)
+                // /start failed — the book was staged but never started; delete orphan.
+                Task { try? await service.delete(bookID) }
+                pendingPDF = nil
+                pendingEstimate = nil
             }
         }
     }
