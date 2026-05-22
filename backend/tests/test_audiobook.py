@@ -879,7 +879,9 @@ async def test_duplicate_pages_get_silence_marker(monkeypatch):
 
     # Pre-write identical raw page files (simulates what PDFExtractor would extract
     # from a DocuSign PDF where both pages contain the same text).
-    long_content = "A" * 200 + "\n\nThis is the full offer letter body with enough text to matter."
+    long_content = (
+        "A" * 200 + "\n\nThis is the full offer letter body with enough text to matter."
+    )
     for n in (1, 2):
         path = AudiobookStore.page_raw_path(bid, n)
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -887,9 +889,7 @@ async def test_duplicate_pages_get_silence_marker(monkeypatch):
             f.write(long_content)
 
     # Mock extractor to avoid needing a real PDF on disk.
-    monkeypatch.setattr(
-        _pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 2)
-    )
+    monkeypatch.setattr(_pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 2))
     monkeypatch.setattr(
         _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b, **kw: None)
     )
@@ -904,12 +904,14 @@ async def test_duplicate_pages_get_silence_marker(monkeypatch):
     clean2 = AudiobookStore.page_clean_path(bid, 2)
 
     # Page 1 must NOT have a silence marker (it is the original content).
-    assert not os.path.exists(clean1), \
-        "page 1 must not have a pre-written clean file (Gemini should clean it)"
+    assert not os.path.exists(
+        clean1
+    ), "page 1 must not have a pre-written clean file (Gemini should clean it)"
 
     # Page 2 must have been pre-written with the silence marker.
-    assert os.path.exists(clean2), \
-        "page 2 (duplicate) must have a pre-written silence marker clean file"
+    assert os.path.exists(
+        clean2
+    ), "page 2 (duplicate) must have a pre-written silence marker clean file"
     with open(clean2, encoding="utf-8") as f:
         marker = f.read()
     assert marker == "-", f"duplicate page clean file must be '-', got: {repr(marker)}"
@@ -940,9 +942,7 @@ async def test_non_duplicate_pages_are_not_marked_silent(monkeypatch):
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
 
-    monkeypatch.setattr(
-        _pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 3)
-    )
+    monkeypatch.setattr(_pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 3))
     monkeypatch.setattr(
         _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b, **kw: None)
     )
@@ -955,8 +955,9 @@ async def test_non_duplicate_pages_are_not_marked_silent(monkeypatch):
 
     # None of the 3 pages should have a pre-written clean file.
     for n in (1, 2, 3):
-        assert not os.path.exists(AudiobookStore.page_clean_path(bid, n)), \
-            f"page {n} should not have a pre-written clean file — content is unique"
+        assert not os.path.exists(
+            AudiobookStore.page_clean_path(bid, n)
+        ), f"page {n} should not have a pre-written clean file — content is unique"
 
 
 # ---------- TXT extraction (non-PDF path) ----------
