@@ -858,6 +858,107 @@ async def test_clean_phase_uses_ocr_for_image_pages(monkeypatch):
     assert len(clean_calls) == 1, "text page should route to clean_page"
 
 
+# ---------- duplicate page deduplication ----------
+
+
+@pytest.mark.asyncio
+async def test_duplicate_pages_get_silence_marker(monkeypatch):
+    """When two pages have identical content (e.g. DocuSign PDFs that embed
+    the same page twice), the second occurrence must receive a '-' silence
+    marker in its clean file so it does not produce duplicate audio.
+    """
+    from app.services import audiobook_service as _svc
+    from app.services import pdf_extractor as _pe
+
+    bid = AudiobookStore.create_book("offer.pdf")
+    meta = AudiobookStore.initial_meta(
+        bid, "offer.pdf", 2, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+    )
+    meta["file_ext"] = "pdf"
+    AudiobookStore.write_meta(bid, meta)
+
+    # Pre-write identical raw page files (simulates what PDFExtractor would extract
+    # from a DocuSign PDF where both pages contain the same text).
+    long_content = "A" * 200 + "\n\nThis is the full offer letter body with enough text to matter."
+    for n in (1, 2):
+        path = AudiobookStore.page_raw_path(bid, n)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(long_content)
+
+    # Mock extractor to avoid needing a real PDF on disk.
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 2)
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b, **kw: None)
+    )
+
+    _svc.AudiobookService._queue = None
+    _svc.AudiobookService._worker_task = None
+    _svc.AudiobookService.initialize()
+
+    await _svc.AudiobookService._phase_extract(bid)
+
+    clean1 = AudiobookStore.page_clean_path(bid, 1)
+    clean2 = AudiobookStore.page_clean_path(bid, 2)
+
+    # Page 1 must NOT have a silence marker (it is the original content).
+    assert not os.path.exists(clean1), \
+        "page 1 must not have a pre-written clean file (Gemini should clean it)"
+
+    # Page 2 must have been pre-written with the silence marker.
+    assert os.path.exists(clean2), \
+        "page 2 (duplicate) must have a pre-written silence marker clean file"
+    with open(clean2, encoding="utf-8") as f:
+        marker = f.read()
+    assert marker == "-", f"duplicate page clean file must be '-', got: {repr(marker)}"
+
+
+@pytest.mark.asyncio
+async def test_non_duplicate_pages_are_not_marked_silent(monkeypatch):
+    """Pages with distinct content must not be marked as silence — the normal
+    Gemini clean path must remain unobstructed."""
+    from app.services import audiobook_service as _svc
+    from app.services import pdf_extractor as _pe
+
+    bid = AudiobookStore.create_book("multipage.pdf")
+    meta = AudiobookStore.initial_meta(
+        bid, "multipage.pdf", 3, "kokoro", "af_bella", 1.0, {"cost_usd": 0.0}
+    )
+    meta["file_ext"] = "pdf"
+    AudiobookStore.write_meta(bid, meta)
+
+    contents = [
+        "Chapter 1: " + "A" * 200,
+        "Chapter 2: " + "B" * 200,
+        "Chapter 3: " + "C" * 200,
+    ]
+    for n, content in enumerate(contents, start=1):
+        path = AudiobookStore.page_raw_path(bid, n)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "page_count", classmethod(lambda cls, p: 3)
+    )
+    monkeypatch.setattr(
+        _pe.PDFExtractor, "render_cover", classmethod(lambda cls, b, **kw: None)
+    )
+
+    _svc.AudiobookService._queue = None
+    _svc.AudiobookService._worker_task = None
+    _svc.AudiobookService.initialize()
+
+    await _svc.AudiobookService._phase_extract(bid)
+
+    # None of the 3 pages should have a pre-written clean file.
+    for n in (1, 2, 3):
+        assert not os.path.exists(AudiobookStore.page_clean_path(bid, n)), \
+            f"page {n} should not have a pre-written clean file — content is unique"
+
+
 # ---------- TXT extraction (non-PDF path) ----------
 
 
@@ -870,7 +971,6 @@ async def test_txt_file_extraction_does_not_call_pdf_extractor(monkeypatch):
     to open the file as a PDF.
     """
     from app.services import audiobook_service as _svc
-    from app.services import text_extractor as _te
     from app.services import pdf_extractor as _pe
 
     bid = AudiobookStore.create_book("sample.txt")
