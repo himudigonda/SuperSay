@@ -15,6 +15,7 @@ Sections detection lives in Phase 2.
 
 import asyncio
 import concurrent.futures
+import hashlib
 import json
 import os
 import struct
@@ -67,6 +68,12 @@ class AudiobookService:
             cls._queue = asyncio.Queue()
         if cls._worker_task is None or cls._worker_task.done():
             cls._worker_task = asyncio.create_task(cls._worker_loop())
+
+    @classmethod
+    def shutdown(cls) -> None:
+        if cls._executor is not None:
+            cls._executor.shutdown(wait=False, cancel_futures=True)
+            cls._executor = None
 
     @classmethod
     async def _worker_loop(cls) -> None:
@@ -322,6 +329,11 @@ class AudiobookService:
                 cls._executor, TextExtractor.render_cover, book_id
             )
 
+        # Track content hashes so duplicate pages (e.g. DocuSign PDFs that embed
+        # the same page twice) are replaced with a silence marker rather than
+        # generating identical audio twice.
+        seen_content_hashes: set[str] = set()
+
         for n in range(1, page_count + 1):
             cls._check_cancel(book_id)
             # Honor /speak preemption between pages.
@@ -337,6 +349,31 @@ class AudiobookService:
                     await loop.run_in_executor(
                         cls._executor, TextExtractor.extract_one, book_id, n
                     )
+
+            # Deduplication: if this page's content is byte-identical to an
+            # earlier page (content hash matches), pre-write "-" to the clean
+            # file so the clean phase skips it and TTS writes silence instead
+            # of repeating the same audio.
+            clean_path = AudiobookStore.page_clean_path(book_id, n)
+            if os.path.exists(out) and not os.path.exists(clean_path):
+                try:
+                    with open(out, encoding="utf-8") as f:
+                        raw = f.read()
+                    stripped = raw.strip()
+                    if len(stripped) > 100:  # ignore trivially short / blank pages
+                        h = hashlib.md5(stripped.encode()).hexdigest()
+                        if h in seen_content_hashes:
+                            # Duplicate — write silence marker, bypass Gemini + TTS
+                            tmp = clean_path + ".tmp"
+                            os.makedirs(os.path.dirname(clean_path), exist_ok=True)
+                            with open(tmp, "w", encoding="utf-8") as f:
+                                f.write("-")
+                            os.replace(tmp, clean_path)
+                        else:
+                            seen_content_hashes.add(h)
+                except OSError:
+                    pass
+
             await AudiobookStore.update_meta(
                 book_id,
                 phase_progress={"page_done": n, "page_total": page_count},
@@ -481,9 +518,27 @@ class AudiobookService:
                             source_path,
                             n,
                         )
-                        cleaned = await GeminiCleaner.ocr_page(api_key, image_bytes)
+                        try:
+                            cleaned = await asyncio.wait_for(
+                                GeminiCleaner.ocr_page(api_key, image_bytes),
+                                timeout=90.0,
+                            )
+                        except asyncio.TimeoutError:
+                            print(
+                                f"[Audiobook] {book_id} page {n} Gemini OCR timeout, using raw text"
+                            )
+                            cleaned = raw_text or "-"
                     else:
-                        cleaned = await GeminiCleaner.clean_page(api_key, raw_text)
+                        try:
+                            cleaned = await asyncio.wait_for(
+                                GeminiCleaner.clean_page(api_key, raw_text),
+                                timeout=90.0,
+                            )
+                        except asyncio.TimeoutError:
+                            print(
+                                f"[Audiobook] {book_id} page {n} Gemini clean timeout, using raw text"
+                            )
+                            cleaned = raw_text or "-"
                 except GeminiAuthError:
                     raise
                 except Exception as e:

@@ -22,7 +22,7 @@ struct NowPlayingBar: View {
             // Cyan progress underline at the very top
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    Rectangle().fill(.white.opacity(0.06))
+                    Rectangle().fill(Color.primary.opacity(0.06))
                     Rectangle()
                         .fill(.cyan)
                         .frame(width: geo.size.width * bookVM.audio.progress)
@@ -90,7 +90,7 @@ struct NowPlayingBar: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(.white.opacity(0.08), lineWidth: 1)
+                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .padding(.horizontal, 16)
         .padding(.bottom, 10)

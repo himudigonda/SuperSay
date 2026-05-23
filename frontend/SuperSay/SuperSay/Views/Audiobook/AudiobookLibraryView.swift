@@ -153,6 +153,7 @@ struct AudiobookLibraryView: View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: 32) {
                     ForEach(filteredSorted, id: \.id) { book in
+                        let isProcessing = (bookVM.processingState[book.bookID] ?? book.displayStatus).isProcessing
                         Button { openBook(book) } label: {
                             AudiobookCardView(book: book)
                                 .environmentObject(vm)
@@ -162,6 +163,7 @@ struct AudiobookLibraryView: View {
                         // P7: without contentShape, macOS hit-testing fires only over
                         // visible pixels. This extends hover/click to the full card rect.
                         .contentShape(Rectangle())
+                        .allowsHitTesting(!isProcessing)
                     }
                 }
                 .padding(36)
@@ -255,7 +257,7 @@ struct AudiobookLibraryView: View {
 
     private var dropOverlay: some View {
         ZStack {
-            Color.black.opacity(0.35).ignoresSafeArea()
+            Color.primary.opacity(0.18).ignoresSafeArea()
                 .background(.ultraThinMaterial)
             VStack(spacing: 24) {
                 Image(systemName: "arrow.down.doc.fill")

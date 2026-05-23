@@ -75,6 +75,8 @@ final class AudiobookViewModel: ObservableObject {
     @Published var sleepUntilEndOfBook: Bool = false
     private var sleepTimerTask: Task<Void, Never>?
 
+    private var completionObserver: AnyCancellable?
+
     init(service: AudiobookService? = nil, audio: AudioService) {
         self.service = service ?? AudiobookService()
         self.audio = audio
@@ -82,6 +84,13 @@ final class AudiobookViewModel: ObservableObject {
         if let stored = KeychainService.get(.geminiAPIKey) {
             self.draftKey = stored
         }
+        // Clear saved position when a book plays to its natural end.
+        completionObserver = audio.$playbackCompleted
+            .filter { $0 }
+            .sink { [weak self] _ in
+                guard let self, let book = self.nowPlaying else { return }
+                UserDefaults.standard.removeObject(forKey: "bookPos_\(book.bookID)")
+            }
     }
 
     var hasStoredKey: Bool { KeychainService.has(.geminiAPIKey) }
@@ -339,13 +348,22 @@ final class AudiobookViewModel: ObservableObject {
     @Published private(set) var isLoadingAudio: Bool = false
 
     func play(_ book: Audiobook) {
-        // S3: serialize. If another play is in flight or this book is already
-        // playing, ignore.
         guard !isLoadingAudio else { return }
-        if nowPlaying?.bookID == book.bookID, audio.isPlaying { return }
+
+        if nowPlaying?.bookID == book.bookID {
+            if audio.playbackCompleted {
+                // Book finished — fall through to restart from beginning
+            } else if !audio.isPlaying {
+                // Paused mid-playback — just resume, don't reload
+                audio.togglePause()
+                return
+            } else {
+                // Already playing
+                return
+            }
+        }
+
         isLoadingAudio = true
-        // S2: drop stale transcript immediately so the UI doesn't flash the
-        // previous book's text while the new one's transcript loads.
         currentTranscript = nil
         Task {
             defer { isLoadingAudio = false }
@@ -355,6 +373,9 @@ final class AudiobookViewModel: ObservableObject {
                 nowPlaying = book
                 lastPlayedBookID = book.bookID
                 try audio.loadAndPlayWAV(at: url)
+                // Restore saved position (skip trivially short seeks < 2 s)
+                let savedTime = UserDefaults.standard.double(forKey: "bookPos_\(book.bookID)")
+                if savedTime > 2.0 { audio.seekAudiobook(toSeconds: savedTime) }
                 Task {
                     self.currentTranscript = try? await self.service.transcript(for: book.bookID)
                 }
@@ -370,9 +391,17 @@ final class AudiobookViewModel: ObservableObject {
         return books.first(where: { $0.bookID == lastPlayedBookID && $0.status == "done" })
     }
 
-    func togglePlayback() { audio.togglePause() }
+    func togglePlayback() {
+        if audio.isPlaying, let book = nowPlaying, audio.currentTime > 1.0 {
+            UserDefaults.standard.set(audio.currentTime, forKey: "bookPos_\(book.bookID)")
+        }
+        audio.togglePause()
+    }
 
     func stopPlayback() {
+        if let book = nowPlaying, audio.currentTime > 1.0, !audio.playbackCompleted {
+            UserDefaults.standard.set(audio.currentTime, forKey: "bookPos_\(book.bookID)")
+        }
         audio.stop()
         nowPlaying = nil
         currentTranscript = nil
