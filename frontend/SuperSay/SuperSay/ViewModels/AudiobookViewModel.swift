@@ -407,6 +407,8 @@ final class AudiobookViewModel: ObservableObject {
         if let book = nowPlaying, audio.currentTime > 1.0, !audio.playbackCompleted, !nearEnd {
             UserDefaults.standard.set(audio.currentTime, forKey: "bookPos_\(book.bookID)")
         }
+        transcriptTask?.cancel()
+        transcriptTask = nil
         audio.stop()
         nowPlaying = nil
         currentTranscript = nil
