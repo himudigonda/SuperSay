@@ -84,10 +84,29 @@ class AudioService: NSObject, ObservableObject {
     private func setupEngine() {
         engine.attach(playerNode)
         engine.connect(playerNode, to: engine.mainMixerNode, format: format)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleEngineConfigChange),
+            name: .AVAudioEngineConfigurationChange,
+            object: engine
+        )
         do {
             try engine.start()
         } catch {
             print("❌ AudioService: Engine start error: \(error)")
+        }
+    }
+
+    @objc private func handleEngineConfigChange(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard let self, isPlaying else { return }
+            do {
+                try engine.start()
+                playerNode.play()
+            } catch {
+                print("❌ AudioService: Engine restart after device change failed: \(error)")
+                stop()
+            }
         }
     }
 
@@ -216,6 +235,11 @@ class AudioService: NSObject, ObservableObject {
             engine.pause()
             isPlaying = false
         } else {
+            if playbackCompleted {
+                pausedTime = 0
+                currentTime = 0
+                progress = 0
+            }
             playbackCompleted = false
             try? engine.start()
             playerNode.play()
@@ -240,9 +264,11 @@ class AudioService: NSObject, ObservableObject {
         let remainingData = lastAudioData.advanced(by: targetByte)
         if let buffer = dataToBuffer(remainingData) {
             scheduledBufferCount += 1
+            let gen = audiobookGeneration
             playerNode.scheduleBuffer(buffer, at: nil, options: [], completionHandler: { [weak self] in
-                Task { @MainActor in
-                    self?.scheduledBufferCount -= 1
+                Task { @MainActor [weak self] in
+                    guard let self, gen == self.audiobookGeneration else { return }
+                    self.scheduledBufferCount -= 1
                 }
             })
 
@@ -290,6 +316,8 @@ class AudioService: NSObject, ObservableObject {
     }
 
     func stop() {
+        volumeRampTimer?.invalidate()
+        volumeRampTimer = nil
         audiobookGeneration += 1  // invalidate any in-flight completion handlers
         playerNode.stop()
         timer?.cancel()
