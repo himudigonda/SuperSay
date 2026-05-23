@@ -356,6 +356,10 @@ async def audiobook_events(book_id: str):
             # Emit current status immediately so the client doesn't need to poll first.
             meta = AudiobookStore.read_meta(book_id) or {}
             yield f"data: {json.dumps({'type': 'snapshot', **meta})}\n\n"
+            # If the book already reached a terminal state before this subscriber
+            # arrived, return immediately instead of waiting forever.
+            if meta.get("status") in {"done", "failed", "cancelled", "ready"}:
+                return
             while True:
                 try:
                     event = await asyncio.wait_for(q.get(), timeout=15.0)
@@ -363,7 +367,7 @@ async def audiobook_events(book_id: str):
                     yield ": keep-alive\n\n"
                     continue
                 yield f"data: {json.dumps(event)}\n\n"
-                if event.get("type") in {"done", "failed"}:
+                if event.get("type") in {"done", "failed", "cancelled"}:
                     break
         finally:
             AudiobookService.unsubscribe(book_id, q)
@@ -403,14 +407,23 @@ def get_audiobook_audio(
             headers={"Accept-Ranges": "bytes", "Content-Length": str(file_size)},
         )
 
-    # Parse `Range: bytes=START-END` (END optional).
+    # Parse `Range: bytes=START-END` (END optional) or `bytes=-N` (suffix form).
     try:
         units, _, rng = range_header.partition("=")
         if units.strip().lower() != "bytes":
             raise ValueError
         start_s, _, end_s = rng.partition("-")
-        start = int(start_s) if start_s else 0
-        end = int(end_s) if end_s else file_size - 1
+        if not start_s and end_s:
+            # Suffix range: bytes=-N means last N bytes
+            suffix_len = int(end_s)
+            start = max(0, file_size - suffix_len)
+            end = file_size - 1
+        elif start_s:
+            start = int(start_s)
+            end = int(end_s) if end_s else file_size - 1
+        else:
+            start = 0
+            end = file_size - 1
         if start < 0 or end >= file_size or start > end:
             raise ValueError
     except ValueError:
