@@ -246,7 +246,7 @@ class GeminiCleaner:
                 chunks.append((cur_start, "".join(cur_pages)))
                 tail = cur_pages[-cls._SECTION_CHUNK_PAGE_OVERLAP :]
                 cur_pages = list(tail)
-                cur_start = i - len(tail) + 1
+                cur_start = i - len(tail)
                 cur_chars = sum(len(t) for t in cur_pages)
             cur_pages.append(block)
             cur_chars += len(block)

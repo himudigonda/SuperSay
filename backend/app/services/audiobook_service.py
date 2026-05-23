@@ -14,6 +14,7 @@ Sections detection lives in Phase 2.
 """
 
 import asyncio
+import calendar
 import concurrent.futures
 import hashlib
 import json
@@ -85,8 +86,9 @@ class AudiobookService:
                 await cls._run_pipeline(book_id)
             except Exception as e:
                 print(f"[Audiobook] Fatal pipeline error for {book_id}: {e}")
-                await AudiobookStore.update_meta(book_id, status="failed", error=str(e))
-                cls._emit(book_id, "failed", error=str(e))
+                if AudiobookStore.read_meta(book_id) is not None:
+                    await AudiobookStore.update_meta(book_id, status="failed", error=str(e))
+                    cls._emit(book_id, "failed", error=str(e))
             finally:
                 cls._current_book_id = None
                 cls._job_keys.pop(book_id, None)
@@ -297,7 +299,6 @@ class AudiobookService:
         except Exception as e:
             await AudiobookStore.update_meta(book_id, status="failed", error=str(e))
             cls._emit(book_id, "failed", error=str(e))
-            raise
         finally:
             cls._cancel_flags.pop(book_id, None)
 
@@ -354,8 +355,11 @@ class AudiobookService:
             # earlier page (content hash matches), pre-write "-" to the clean
             # file so the clean phase skips it and TTS writes silence instead
             # of repeating the same audio.
+            # On resume, pages with both raw and clean files already present
+            # must still be hashed so the seen_content_hashes set is correctly
+            # populated for subsequent pages.
             clean_path = AudiobookStore.page_clean_path(book_id, n)
-            if os.path.exists(out) and not os.path.exists(clean_path):
+            if os.path.exists(out):
                 try:
                     with open(out, encoding="utf-8") as f:
                         raw = f.read()
@@ -363,12 +367,13 @@ class AudiobookService:
                     if len(stripped) > 100:  # ignore trivially short / blank pages
                         h = hashlib.md5(stripped.encode()).hexdigest()
                         if h in seen_content_hashes:
-                            # Duplicate — write silence marker, bypass Gemini + TTS
-                            tmp = clean_path + ".tmp"
-                            os.makedirs(os.path.dirname(clean_path), exist_ok=True)
-                            with open(tmp, "w", encoding="utf-8") as f:
-                                f.write("-")
-                            os.replace(tmp, clean_path)
+                            if not os.path.exists(clean_path):
+                                # Duplicate — write silence marker, bypass Gemini + TTS
+                                tmp = clean_path + ".tmp"
+                                os.makedirs(os.path.dirname(clean_path), exist_ok=True)
+                                with open(tmp, "w", encoding="utf-8") as f:
+                                    f.write("-")
+                                os.replace(tmp, clean_path)
                         else:
                             seen_content_hashes.add(h)
                 except OSError:
@@ -382,6 +387,7 @@ class AudiobookService:
                 book_id, "page_done", phase="extracting", page=n, total=page_count
             )
 
+        await AudiobookStore.update_meta(book_id, page_count=page_count)
         cls._emit(book_id, "phase_finished", phase="extracting")
 
     # ---------- phase: section detection ----------
@@ -444,7 +450,13 @@ class AudiobookService:
                 with open(p, encoding="utf-8") as f:
                     cleaned_pages.append(f.read())
             try:
-                sections = await GeminiCleaner.detect_sections(api_key, cleaned_pages)
+                sections = await asyncio.wait_for(
+                    GeminiCleaner.detect_sections(api_key, cleaned_pages),
+                    timeout=120.0,
+                )
+            except asyncio.TimeoutError:
+                print(f"[Audiobook] {book_id} section detection timed out, skipping")
+                sections = []
             except GeminiAuthError:
                 raise
             except Exception as e:
@@ -764,7 +776,7 @@ class AudiobookService:
 
         created_at = meta.get("created_at", _now_iso())
         try:
-            t_created = time.mktime(time.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ"))
+            t_created = calendar.timegm(time.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ"))
             processing_seconds = max(0.0, time.time() - t_created)
         except Exception:
             processing_seconds = 0.0
