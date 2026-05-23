@@ -148,6 +148,12 @@ class DashboardViewModel: ObservableObject {
         }
 
         currentSpeakTask = Task {
+            defer {
+                if Task.isCancelled {
+                    if self.status == .thinking { self.status = .ready }
+                    self.audio.stop()
+                }
+            }
             print("DEBUG [DashboardVM] Starting new speak task")
             status = .thinking
 
@@ -332,13 +338,11 @@ class DashboardViewModel: ObservableObject {
                     self.hasUpdate = true
                     self.showUpdateSheet = true
                 } else if manual {
-                    DispatchQueue.main.async {
-                        let alert = NSAlert()
-                        alert.messageText = "You're Up to Date"
-                        alert.informativeText = "SuperSay \(currentVersion) is the latest version."
-                        alert.addButton(withTitle: "OK")
-                        alert.runModal()
-                    }
+                    let alert = NSAlert()
+                    alert.messageText = "You're Up to Date"
+                    alert.informativeText = "SuperSay \(currentVersion) is the latest version."
+                    alert.addButton(withTitle: "OK")
+                    alert.runModal()
                 }
             } catch {
                 print("❌ Update check failed: \(error)")

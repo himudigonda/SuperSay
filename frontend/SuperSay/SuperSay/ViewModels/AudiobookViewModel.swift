@@ -59,6 +59,7 @@ final class AudiobookViewModel: ObservableObject {
 
     // Transcript for the currently-playing book (for live highlighting).
     @Published var currentTranscript: AudiobookService.Transcript?
+    private var transcriptTask: Task<Void, Never>?
 
     /// Set by sidebar / NowPlayingBar when the user wants to navigate into
     /// the player. The library view observes this and pushes onto its
@@ -261,6 +262,7 @@ final class AudiobookViewModel: ObservableObject {
     private func subscribe(to bookID: String) {
         sseTasks[bookID]?.cancel()
         sseTasks[bookID] = Task { [weak self] in
+            defer { self?.sseTasks[bookID] = nil }
             guard let self else { return }
             for await event in service.subscribe(to: bookID) {
                 let type = event["type"] as? String ?? ""
@@ -284,11 +286,9 @@ final class AudiobookViewModel: ObservableObject {
                     if let book {
                         completionSummary = book
                     }
-                    sseTasks[bookID] = nil
                     break
                 } else if type == "failed" || type == "cancelled" {
                     await refresh()
-                    sseTasks[bookID] = nil
                     break
                 }
             }
@@ -376,8 +376,12 @@ final class AudiobookViewModel: ObservableObject {
                 // Restore saved position (skip trivially short seeks < 2 s)
                 let savedTime = UserDefaults.standard.double(forKey: "bookPos_\(book.bookID)")
                 if savedTime > 2.0 { audio.seekAudiobook(toSeconds: savedTime) }
-                Task {
-                    self.currentTranscript = try? await self.service.transcript(for: book.bookID)
+                transcriptTask?.cancel()
+                transcriptTask = Task { [weak self] in
+                    guard let self else { return }
+                    let result = try? await self.service.transcript(for: book.bookID)
+                    guard !Task.isCancelled else { return }
+                    self.currentTranscript = result
                 }
             } catch {
                 showToast("Could not load audio: \(error.localizedDescription)", kind: .error)
@@ -399,7 +403,8 @@ final class AudiobookViewModel: ObservableObject {
     }
 
     func stopPlayback() {
-        if let book = nowPlaying, audio.currentTime > 1.0, !audio.playbackCompleted {
+        let nearEnd = audio.duration > 0 && audio.currentTime >= audio.duration - 5.0
+        if let book = nowPlaying, audio.currentTime > 1.0, !audio.playbackCompleted, !nearEnd {
             UserDefaults.standard.set(audio.currentTime, forKey: "bookPos_\(book.bookID)")
         }
         audio.stop()
@@ -534,9 +539,17 @@ final class AudiobookViewModel: ObservableObject {
 
     func delete(_ book: Audiobook) {
         Task {
-            try? await service.delete(book.bookID)
+            do {
+                try await service.delete(book.bookID)
+            } catch {
+                showToast("Could not delete book", kind: .error)
+                return
+            }
             // P1: clear Continue Listening pointer if the deleted book was it.
-            if lastPlayedBookID == book.bookID { lastPlayedBookID = "" }
+            if lastPlayedBookID == book.bookID {
+                UserDefaults.standard.removeObject(forKey: "lastPlayedBookID")
+                lastPlayedBookID = ""
+            }
             // P5: drop processing-state entry so it doesn't leak.
             processingState.removeValue(forKey: book.bookID)
             await refresh()

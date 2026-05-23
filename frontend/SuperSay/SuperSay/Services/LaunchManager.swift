@@ -68,20 +68,30 @@ class LaunchManager: ObservableObject {
             }
             try fm.createDirectory(at: appSupport, withIntermediateDirectories: true)
 
-            let unzip = Process()
-            unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
-            unzip.arguments = ["-o", "-q", zipURL.path, "-d", appSupport.path]
-            try unzip.run()
-            unzip.waitUntilExit()
+            let zipPath = zipURL.path
+            let appSupportPath = appSupport.path
+            let execPath = executableURL.path
+            let versionMarkerPath = versionMarkerURL.path
+            try await Task.detached(priority: .userInitiated) {
+                let unzip = Process()
+                unzip.executableURL = URL(fileURLWithPath: "/usr/bin/unzip")
+                unzip.arguments = ["-o", "-q", zipPath, "-d", appSupportPath]
+                try unzip.run()
+                unzip.waitUntilExit()
 
-            let chmod = Process()
-            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
-            chmod.arguments = ["755", executableURL.path]
-            try chmod.run()
-            chmod.waitUntilExit()
+                let chmod = Process()
+                chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+                chmod.arguments = ["755", execPath]
+                try chmod.run()
+                chmod.waitUntilExit()
 
-            // Stamp version so the next launch takes the fast path.
-            try currentVersion.write(to: versionMarkerURL, atomically: true, encoding: .utf8)
+                // Stamp version so the next launch takes the fast path.
+                try currentVersion.write(
+                    to: URL(fileURLWithPath: versionMarkerPath),
+                    atomically: true,
+                    encoding: .utf8
+                )
+            }.value
 
             print("✅ Backend extracted successfully.")
             isReady = true
