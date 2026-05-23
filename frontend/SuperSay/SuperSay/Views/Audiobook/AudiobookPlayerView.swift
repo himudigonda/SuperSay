@@ -199,6 +199,7 @@ struct AudiobookPlayerView: View {
                 .gesture(
                     DragGesture(minimumDistance: 0)
                         .onChanged { v in
+                            guard w > 0 else { return }
                             localScrub = max(0, min(1, v.location.x / w))
                             dragging = true
                         }
@@ -509,7 +510,7 @@ struct AudiobookPlayerView: View {
     }
 
     private func adjustSpeed(_ delta: Double) {
-        let raw = (playerSpeed + delta * 100).rounded() / 100
+        let raw = ((playerSpeed + delta) * 100).rounded() / 100
         let clamped = min(2.0, max(0.75, raw))
         playerSpeed = clamped
         bookVM.defaultBookSpeed = clamped

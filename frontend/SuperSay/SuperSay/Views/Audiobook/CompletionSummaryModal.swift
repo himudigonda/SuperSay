@@ -48,7 +48,8 @@ struct CompletionSummaryModal: View {
                     // Defer the navigation push until after the sheet finishes
                     // dismissing — pushing during dismissal can leave the
                     // NavigationStack in a half-dismissed state on macOS.
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    Task { @MainActor in
+                        try? await Task.sleep(for: .milliseconds(250))
                         callback?(snapshot)
                     }
                 } label: {

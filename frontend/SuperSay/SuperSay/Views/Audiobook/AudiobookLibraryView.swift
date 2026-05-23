@@ -70,9 +70,17 @@ struct AudiobookLibraryView: View {
                 ]
             ) { result in
                 if case .success(let url) = result {
-                    let scoped = url.startAccessingSecurityScopedResource()
-                    defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-                    presentEstimate(for: url)
+                    guard url.startAccessingSecurityScopedResource() else { return }
+                    let tmpURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(url.lastPathComponent)
+                    do {
+                        let data = try Data(contentsOf: url)
+                        url.stopAccessingSecurityScopedResource()
+                        try data.write(to: tmpURL)
+                        presentEstimate(for: tmpURL)
+                    } catch {
+                        url.stopAccessingSecurityScopedResource()
+                    }
                 }
             }
             // ONE sheet, driven by a computed binding that prefers the
@@ -235,7 +243,19 @@ struct AudiobookLibraryView: View {
             }
             let allowed: Set<String> = ["pdf", "txt", "docx", "md"]
             guard let url, allowed.contains(url.pathExtension.lowercased()) else { return }
-            Task { @MainActor in presentEstimate(for: url) }
+
+            // Acquire security scope, copy to temp, release scope
+            let scoped = url.startAccessingSecurityScopedResource()
+            let tmpURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(url.lastPathComponent)
+            do {
+                let data = try Data(contentsOf: url)
+                if scoped { url.stopAccessingSecurityScopedResource() }
+                try data.write(to: tmpURL)
+                Task { @MainActor in presentEstimate(for: tmpURL) }
+            } catch {
+                if scoped { url.stopAccessingSecurityScopedResource() }
+            }
         }
         return true
     }
