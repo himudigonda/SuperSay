@@ -260,7 +260,7 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track G — Production polish
 
-- [ ] **S1-G1** — Backend structured logging
+- [x] **S1-G1** — Backend structured logging
   - **What:** Replace `print`/loose logging with `structlog` in all new code; existing code on touch.
   - **Why:** JSON logs + correlation ids are the floor for triaging the new public endpoints.
   - **Files:** `backend/app/services/*` (touch on contact), `backend/app/api/endpoints.py` (touch)
@@ -295,14 +295,14 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
   - **Acceptance:** Doc exists, reviewed; covers all six event names and the rollup schema.
   - **Risk:** Low
 
-- [ ] **S1-G6** — Test coverage
+- [x] **S1-G6** — Test coverage
   - **What:** Backend pytest ≥ 85% on touched files; Swift XCTest for `AuthService`, `MetricsService`, `OnboardingCoordinator`.
   - **Why:** "Done" requires runtime evidence; this is the gate.
   - **Files:** `backend/tests/**`, `frontend/SuperSay/SuperSayTests/**`
   - **Acceptance:** `make test` green on SuperSay; `pnpm test` green on himudigonda.me; coverage report attached to PR; baseline pyright/swiftlint error counts not increased on touched files.
   - **Risk:** High — flaky tests block release
 
-- [ ] **S1-G7** — Codebase polish on touched files
+- [x] **S1-G7** — Codebase polish on touched files
   - **What:** ruff/black clean, swiftlint clean, pyright clean; remove dead code observed in passing — no rip-and-replace beyond touched files.
   - **Why:** The whole-team standard from the working agreement.
   - **Files:** all touched

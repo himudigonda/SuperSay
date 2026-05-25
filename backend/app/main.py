@@ -4,13 +4,20 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from app.api.endpoints import router
+from app.api.middleware import CorrelationMiddleware
 from app.core.config import settings
+from app.core.logging import configure as configure_logging
+from app.core.logging import get_logger
 from app.services.engine_manager import EngineManager
 from app.services.tts import TTSEngine
 from fastapi import FastAPI
 
 # Force asyncio backend for uvicorn compatibility
 os.environ["ANYIO_BACKEND"] = "asyncio"
+
+# Structured JSON logs (S1-G1). Idempotent.
+configure_logging()
+log = get_logger("supersay.main")
 
 # PID of the Swift app that spawned us (captured at import time, before any fork).
 _PARENT_PID = os.getppid()
@@ -28,7 +35,7 @@ async def _parent_watchdog() -> None:
         try:
             os.kill(_PARENT_PID, 0)  # 0 = existence check only, no signal sent
         except ProcessLookupError:
-            print("[Watchdog] Parent app gone — server exiting.")
+            log.info("watchdog.parent_gone")
             os._exit(0)
         except PermissionError:
             pass  # process exists but we lack permission to signal it — keep running
@@ -43,11 +50,11 @@ async def _load_engine_background() -> None:
     """
     loop = asyncio.get_running_loop()
     try:
-        print("[Startup] Loading Kokoro TTS engine in background…")
+        log.info("startup.engine_load.begin")
         await loop.run_in_executor(None, EngineManager.initialize)
-        print("[Startup] ✅ Kokoro TTS engine ready")
+        log.info("startup.engine_load.ready")
     except Exception as exc:
-        print(f"[Startup] ❌ Engine init failed: {exc}")
+        log.error("startup.engine_load.failed", extra={"err": str(exc)})
         return
 
     # Wire idle-unload watcher only after the model is in RAM.
@@ -76,6 +83,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
+app.add_middleware(CorrelationMiddleware)
 
 
 app.include_router(router)
