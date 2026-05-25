@@ -1,10 +1,12 @@
 import Foundation
 import Security
 
-/// Minimal Keychain wrapper for storing the user's Gemini API key.
+/// Minimal Keychain wrapper for sensitive strings.
 /// Uses kSecAttrAccessibleAfterFirstUnlock so background relaunch can read.
 enum KeychainKey: String {
     case geminiAPIKey = "com.himudigonda.SuperSay.gemini_api_key"
+    case sessionToken = "com.himudigonda.SuperSay.session_token"
+    case refreshToken = "com.himudigonda.SuperSay.refresh_token"
 }
 
 enum KeychainService {

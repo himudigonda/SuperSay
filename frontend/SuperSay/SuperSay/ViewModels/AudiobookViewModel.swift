@@ -1,6 +1,14 @@
 import AppKit
 import Combine
+import CryptoKit
 import SwiftUI
+
+/// SHA-256 hex of a string. Used to anonymize book ids before they leave the device
+/// (see `docs/specs/accounts-analytics.md` §5.3).
+private func sha256Hex(_ input: String) -> String {
+    let digest = SHA256.hash(data: Data(input.utf8))
+    return digest.map { String(format: "%02x", $0) }.joined()
+}
 
 @MainActor
 final class AudiobookViewModel: ObservableObject {
@@ -91,6 +99,10 @@ final class AudiobookViewModel: ObservableObject {
             .sink { [weak self] _ in
                 guard let self, let book = self.nowPlaying else { return }
                 UserDefaults.standard.removeObject(forKey: "bookPos_\(book.bookID)")
+                MetricsService.shared.trackAudiobookPlay(
+                    bookIDHash: sha256Hex(book.bookID),
+                    secondsPlayed: self.audio.duration
+                )
             }
     }
 
@@ -160,6 +172,10 @@ final class AudiobookViewModel: ObservableObject {
             do {
                 let estimate = try await service.upload(pdf: pdf, voice: voice, speed: speed, engine: engine)
                 pendingEstimate = estimate
+                MetricsService.shared.trackAudiobookUpload(
+                    pages: estimate.pageCount,
+                    fileKind: "pdf" // backend only accepts PDF today; whitelist allows txt/epub for the future
+                )
             } catch {
                 showToast(error.localizedDescription, kind: .error)
                 pendingPDF = nil
@@ -406,6 +422,14 @@ final class AudiobookViewModel: ObservableObject {
         let nearEnd = audio.duration > 0 && audio.currentTime >= audio.duration - 5.0
         if let book = nowPlaying, audio.currentTime > 1.0, !audio.playbackCompleted, !nearEnd {
             UserDefaults.standard.set(audio.currentTime, forKey: "bookPos_\(book.bookID)")
+        }
+        // Emit audiobook_play on manual stop too (natural completion is handled
+        // in the playbackCompleted observer). Only counts non-trivial sessions.
+        if let book = nowPlaying, audio.currentTime > 5.0, !audio.playbackCompleted {
+            MetricsService.shared.trackAudiobookPlay(
+                bookIDHash: sha256Hex(book.bookID),
+                secondsPlayed: audio.currentTime
+            )
         }
         transcriptTask?.cancel()
         transcriptTask = nil

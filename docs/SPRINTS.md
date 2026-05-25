@@ -140,7 +140,7 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
   - **Acceptance:** Visual review on light + dark; Skip dismisses without account; successful sign-in stores token and dismisses sheet; bad password shows inline error.
   - **Risk:** Low
 
-- [ ] **S1-C4** — Keychain extension
+- [x] **S1-C4** — Keychain extension
   - **What:** Add `sessionToken` case alongside existing `geminiAPIKey`.
   - **Why:** Re-use the audited keychain wrapper rather than a new one.
   - **Files:** `frontend/SuperSay/SuperSay/Services/KeychainService.swift` (touch)
@@ -158,35 +158,34 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track D — Frontend / telemetry v2 (Swift)
 
-- [ ] **S1-D1** — `MetricsService` rewrite
+- [x] **S1-D1** — `MetricsService` rewrite
   - **What:** Batched event queue (flushes every 30s or 20 events), attaches Bearer when signed, attaches anon_id always, enforces a **client-side whitelist of allowed props keys** (defense in depth).
   - **Why:** Single owner of all outbound analytics; the whitelist is the second wall protecting the privacy promise.
   - **Files:** `frontend/SuperSay/SuperSay/Services/MetricsService.swift` (rewrite, preserve callsites)
   - **Acceptance:** XCTest — sending an event with a `text` key drops `text` before HTTP serialization; queue persists across app restarts via UserDefaults; flush triggers after 30s or 20 events whichever first.
   - **Risk:** High — accidentally sending PII would burn the privacy story
 
-- [ ] **S1-D2** — Track audio-seconds on completion
+- [x] **S1-D2** — Track audio-seconds on completion
   - **What:** `AudioService` already knows playback duration; emit `generation` event with `{chars, voice, speed, audio_seconds}` once playback completes (not on call start).
   - **Why:** The headline metric for the public posts is hours of audio generated — must be the rendered length, not an estimate.
   - **Files:** `frontend/SuperSay/SuperSay/Services/AudioService.swift` (touch), `frontend/SuperSay/SuperSay/ViewModels/DashboardViewModel.swift` (touch)
   - **Acceptance:** `audio_seconds` matches rendered output length within ±50ms; verified by comparing two known-length samples; cancelled playback emits no event.
   - **Risk:** Med — race between completion and cancellation
 
-- [ ] **S1-D3** — Audiobook funnel events
+- [x] **S1-D3** — Audiobook funnel events
   - **What:** Emit `audiobook_upload` (pages, file_kind), `audiobook_play` (book_id_hash, seconds_played); file name and content never leave the device. `book_id_hash` = SHA-256 of the local id.
   - **Why:** Powers the audiobook funnel chart (F5).
   - **Files:** `frontend/SuperSay/SuperSay/ViewModels/AudiobookViewModel.swift` (touch)
   - **Acceptance:** `book_id_hash` is the SHA-256 of the local id, never the title; verified by reading the outbound payload in a debug log; XCTest asserts the hash is deterministic and 64 hex chars.
   - **Risk:** Low
 
-- [ ] **S1-D4** — `X-Audio-Seconds` response header
-  - **What:** Backend `/speak` endpoint emits `X-Audio-Seconds` containing rendered duration so the client has a server-confirmed number when wiring D2.
-  - **Why:** Removes client-side estimation error on the headline metric.
-  - **Files:** `backend/app/api/endpoints.py` (touch), `backend/app/services/tts.py` (touch)
-  - **Acceptance:** `curl -i /speak` shows `X-Audio-Seconds: <float>` header; existing streaming behavior unchanged; pytest covers the header path.
-  - **Risk:** Med — header timing in `StreamingResponse` (must be set before first byte)
+- [x] **S1-D4** — Client-side `audio_seconds` accumulator (revised in spec §10)
+  - **Revision:** Original plan was a backend `X-Audio-Seconds` response header. Dropped — `StreamingResponse` cannot set a header value that's only known after the last sentence finishes rendering. Instead, source `audio_seconds` from `AudioService.renderedAudioSeconds` (PCM frames / sample rate) at the moment `DashboardViewModel.speak()` calls `audio.finishStream()`. Accurate, no protocol contortions, no backend change required.
+  - **Files:** `frontend/SuperSay/SuperSay/Services/AudioService.swift` (added `renderedAudioSeconds`), `frontend/SuperSay/SuperSay/ViewModels/DashboardViewModel.swift` (uses it in the post-stream metric emit)
+  - **Acceptance:** `audio_seconds` is the rendered length within ±1 frame; covered by `MetricsServiceTests.testAudioSecondsAccumulator` (G6).
+  - **Risk:** Now low.
 
-- [ ] **S1-D5** — Honor `telemetryEnabled` for all new events
+- [x] **S1-D5** — Honor `telemetryEnabled` for all new events (kill switch in `MetricsService.enqueue` + `flushLocked`; HAR proof deferred to runtime-verify pass)
   - **What:** With the existing toggle off, nothing leaves the box — zero requests to himudigonda.me during a full session.
   - **Why:** The toggle is the user-visible escape hatch and the most checkable promise.
   - **Files:** `frontend/SuperSay/SuperSay/Services/MetricsService.swift` (touch)

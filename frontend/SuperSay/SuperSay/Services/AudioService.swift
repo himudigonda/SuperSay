@@ -519,6 +519,17 @@ class AudioService: NSObject, ObservableObject {
         }
     }
 
+    /// Total rendered audio length of the *current* TTS session, derived
+    /// from accumulated PCM frames. Source of truth for the
+    /// `audio_seconds` metric (see spec §10). Returns 0 when no session
+    /// has rendered any audio yet.
+    var renderedAudioSeconds: Double {
+        if audiobookTotalFrames > 0 {
+            return Double(audiobookTotalFrames) / max(1, audiobookSampleRate)
+        }
+        return Double(lastAudioData.count / 2) / format.sampleRate
+    }
+
     func exportToDesktop() {
         guard !lastAudioData.isEmpty else { return }
         let headerSize = 44
@@ -541,5 +552,6 @@ class AudioService: NSObject, ObservableObject {
         let filename = "SuperSay_\(Int(Date().timeIntervalSince1970)).wav"
         let desktopURL = FileManager.default.urls(for: .desktopDirectory, in: .userDomainMask)[0].appendingPathComponent(filename)
         try? wavData.write(to: desktopURL)
+        MetricsService.shared.trackExport(audioSeconds: renderedAudioSeconds)
     }
 }

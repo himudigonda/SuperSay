@@ -184,7 +184,14 @@ class DashboardViewModel: ObservableObject {
             if !Task.isCancelled {
                 audio.finishStream()
                 history.log(text: cleaned, voice: selectedVoice)
-                MetricsService.shared.trackGeneration(charCount: cleaned.count)
+                // audio_seconds is the rendered length (PCM frames / sample rate),
+                // computed by AudioService after finishStream(). See spec §10.
+                MetricsService.shared.trackGeneration(
+                    chars: cleaned.count,
+                    voice: selectedVoice,
+                    speed: speechSpeed,
+                    audioSeconds: audio.renderedAudioSeconds
+                )
             }
         }
     }
