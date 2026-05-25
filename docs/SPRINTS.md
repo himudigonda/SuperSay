@@ -281,14 +281,14 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
   - **Acceptance:** Test fires 1000 req/min and observes 429s past the configured threshold; auth endpoints capped tighter than `/events`.
   - **Risk:** Med (requires ADR — see ADR flags below — if Upstash is chosen as a new external dependency)
 
-- [ ] **S1-G4** — `PRIVACY.md`
+- [x] **S1-G4** — `PRIVACY.md`
   - **What:** Exhaustive list of every byte that leaves the user's Mac, with `file:line` references back into the code so it can be audited.
   - **Why:** The single most important document for the public posts; it is what makes the privacy promise verifiable.
   - **Files:** `SuperSay/PRIVACY.md` (new)
   - **Acceptance:** Linked from onboarding step 5 and from the README; every claim has at least one `file:line` reference; user re-reads and clicks each link to confirm.
   - **Risk:** Low
 
-- [ ] **S1-G5** — `docs/analytics.md`
+- [x] **S1-G5** — `docs/analytics.md`
   - **What:** What each event means, how rollups are computed, sample SQL queries for the dashboard.
   - **Why:** Future-self + future-contributor reference; reduces the chance of an event being added without thinking.
   - **Files:** `SuperSay/docs/analytics.md` (new)
