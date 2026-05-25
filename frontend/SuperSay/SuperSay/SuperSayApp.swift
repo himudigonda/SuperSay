@@ -18,6 +18,9 @@ struct SuperSayApp: App {
     /// Audiobook ViewModel (own state)
     @StateObject private var audiobookVM: AudiobookViewModel
 
+    /// First-launch + onboarding state (S1-E3).
+    @StateObject private var onboarding = OnboardingCoordinator()
+
     /// 3. Backend (Kept private, managed by VM, but we own the instance to stop deinit)
     private let backend: BackendService
 
@@ -169,6 +172,7 @@ struct SuperSayApp: App {
                 .environmentObject(history)
                 .environmentObject(launchManager)
                 .environmentObject(audiobookVM)
+                .environmentObject(onboarding)
         }
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["dashboard"])

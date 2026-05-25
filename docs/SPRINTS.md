@@ -196,21 +196,21 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track E — Onboarding (Swift)
 
-- [ ] **S1-E1** — `OnboardingView` (5 steps)
+- [x] **S1-E1** — `OnboardingView` (5 steps)
   - **What:** Paged view — (1) Welcome + what SuperSay is, (2) Cmd+Shift+. demo with live mini-TTS sample, (3) Voices + speed, (4) Audiobooks + how Gemini is used (only when *you* paste a key + only for cleaning, never for TTS), (5) Privacy + sign-in nudge.
   - **Why:** First-launch experience that teaches the app and earns the sign-in.
   - **Files:** `frontend/SuperSay/SuperSay/Views/Onboarding/OnboardingView.swift` (new)
   - **Acceptance:** Shows once on first launch (`@AppStorage("hasOnboarded")`); Skip available on every step; final step has "Sign in" + "Maybe later" buttons of equal visual weight; verified by deleting the flag and relaunching.
   - **Risk:** Low
 
-- [ ] **S1-E2** — Privacy + nudge copy
+- [x] **S1-E2** — Privacy + nudge copy (in `Views/Onboarding/OnboardingCopy.swift`)
   - **What:** Step-5 copy reads approximately: *"SuperSay runs fully on your Mac. Your text never leaves this machine. Signing in only helps us count how many people use SuperSay and how much audio gets generated — it's the only way we can show real growth numbers when we share the project publicly. We never read what you type."* + link to `PRIVACY.md`. Copy lives in a constants file, not hardcoded in the view body.
   - **Why:** This is the single most important sentence in the sprint — it has to be true and editable.
   - **Files:** `frontend/SuperSay/SuperSay/Views/Onboarding/OnboardingView.swift`, `frontend/SuperSay/SuperSay/Views/Onboarding/PrivacyCard.swift` (new)
   - **Acceptance:** Wording reviewed by user before commit; copy is exported from a Swift constants file (e.g. `OnboardingCopy.privacyNudge`) so it is editable without view churn; PRIVACY.md link opens in default browser.
   - **Risk:** Low
 
-- [ ] **S1-E3** — `OnboardingCoordinator`
+- [x] **S1-E3** — `OnboardingCoordinator`
   - **What:** First-launch detection refactor — one source of truth for "has user completed onboarding".
   - **Why:** Today the flag is read in scattered `@AppStorage` calls in `SuperSayApp.init`; needs a single owner.
   - **Files:** `frontend/SuperSay/SuperSay/Services/OnboardingCoordinator.swift` (new), `frontend/SuperSay/SuperSay/SuperSayApp.swift` (touch)

@@ -7,8 +7,10 @@ struct SuperSayWindow: View {
     @EnvironmentObject var history: HistoryManager
     @EnvironmentObject var launchManager: LaunchManager
     @EnvironmentObject var bookVM: AudiobookViewModel
+    @EnvironmentObject var onboarding: OnboardingCoordinator
     @Environment(\.colorScheme) var colorScheme
     @State private var globalDropHovering = false
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationSplitView {
@@ -199,6 +201,28 @@ struct SuperSayWindow: View {
             // Prepare backend if needed
             Task {
                 await launchManager.prepare()
+            }
+
+            // First-launch onboarding (S1-E1). Defer one runloop so the
+            // window has fully appeared before the sheet animates in.
+            if onboarding.needsOnboarding {
+                DispatchQueue.main.async {
+                    showOnboarding = true
+                }
+            }
+        }
+        .sheet(isPresented: $showOnboarding) {
+            OnboardingView(onSignInTapped: {
+                // C1-C3 not shipped yet — for now treat sign-in tap as
+                // "complete onboarding"; once SignInView exists, present it.
+                onboarding.markCompleted()
+                showOnboarding = false
+            })
+            .environmentObject(onboarding)
+        }
+        .onChange(of: onboarding.version) { _, _ in
+            if !onboarding.needsOnboarding {
+                showOnboarding = false
             }
         }
         .overlay {
