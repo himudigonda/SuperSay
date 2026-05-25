@@ -8,9 +8,11 @@ struct SuperSayWindow: View {
     @EnvironmentObject var launchManager: LaunchManager
     @EnvironmentObject var bookVM: AudiobookViewModel
     @EnvironmentObject var onboarding: OnboardingCoordinator
+    @EnvironmentObject var auth: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     @State private var globalDropHovering = false
     @State private var showOnboarding = false
+    @State private var showSignIn = false
 
     var body: some View {
         NavigationSplitView {
@@ -213,12 +215,18 @@ struct SuperSayWindow: View {
         }
         .sheet(isPresented: $showOnboarding) {
             OnboardingView(onSignInTapped: {
-                // C1-C3 not shipped yet — for now treat sign-in tap as
-                // "complete onboarding"; once SignInView exists, present it.
                 onboarding.markCompleted()
                 showOnboarding = false
+                // Defer a runloop so the onboarding sheet dismisses first;
+                // SwiftUI does not love two sheets back-to-back.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    showSignIn = true
+                }
             })
             .environmentObject(onboarding)
+        }
+        .sheet(isPresented: $showSignIn) {
+            SignInView().environmentObject(auth)
         }
         .onChange(of: onboarding.version) { _, _ in
             if !onboarding.needsOnboarding {

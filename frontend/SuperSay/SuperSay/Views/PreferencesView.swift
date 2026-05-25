@@ -6,8 +6,10 @@ struct PreferencesView: View {
     @EnvironmentObject var audio: AudioService
     @EnvironmentObject var launchManager: LaunchManager
     @EnvironmentObject var bookVM: AudiobookViewModel
+    @EnvironmentObject var auth: AuthViewModel
 
     @AppStorage("showMenuBarIcon") var showMenuBarIcon = true
+    @State private var showSignInSheet = false
 
     var body: some View {
         ScrollView {
@@ -21,6 +23,45 @@ struct PreferencesView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.bottom, 8)
+
+                // Section: Account (S1-C5)
+                PreferenceSection(title: "Account", icon: "person.crop.circle") {
+                    VStack(alignment: .leading, spacing: 14) {
+                        if auth.isSignedIn {
+                            HStack(spacing: 12) {
+                                Image(systemName: "checkmark.seal.fill")
+                                    .foregroundStyle(.cyan)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(auth.currentUser?.displayName ?? auth.currentUser?.email ?? "Signed in")
+                                        .font(vm.appFont(size: 14, weight: .bold))
+                                    if let email = auth.currentUser?.email, auth.currentUser?.displayName != nil {
+                                        Text(email).font(vm.appFont(size: 11)).foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Button("Sign out", role: .destructive) { auth.signOut() }
+                                    .buttonStyle(.bordered)
+                            }
+                        } else {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Sign in to count yourself")
+                                    .font(vm.appFont(size: 14, weight: .bold))
+                                Text("Optional. We never read your text — sign-in only links your anonymous usage to a public total so we can share real growth numbers.")
+                                    .font(vm.appFont(size: 11))
+                                    .foregroundStyle(.secondary)
+                                Button {
+                                    showSignInSheet = true
+                                } label: {
+                                    Label("Sign in (Google or email)", systemImage: "lock.shield")
+                                        .font(vm.appFont(size: 13, weight: .medium))
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.cyan)
+                                .padding(.top, 4)
+                            }
+                        }
+                    }
+                }
 
                 // Section: Voice Engine
                 PreferenceSection(title: "Voice Engine", icon: "cpu") {
@@ -344,6 +385,9 @@ struct PreferencesView: View {
             }
             .padding(40)
             .frame(maxWidth: 800)
+        }
+        .sheet(isPresented: $showSignInSheet) {
+            SignInView().environmentObject(auth)
         }
     }
 

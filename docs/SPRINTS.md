@@ -41,28 +41,28 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track A — Backend / Supabase schema (himudigonda.me)
 
-- [ ] **S1-A1** — Spec the analytics + auth feature
+- [x] **S1-A1** — Spec the analytics + auth feature
   - **What:** Write the spec doc covering actor model, event schema, endpoint contracts, error responses, rate-limit story. Spec lands before any code.
   - **Why:** Locks the contract between Swift client, API, and dashboard; eliminates re-design mid-implementation.
   - **Files:** `SuperSay/docs/specs/accounts-analytics.md` (new)
   - **Acceptance:** Spec file exists, reviewed; every B-track endpoint references a section of this spec.
   - **Risk:** Low
 
-- [ ] **S1-A2** — Supabase migration: tables + RLS
+- [x] **S1-A2** — Supabase migration: tables + RLS
   - **What:** Migration creating `supersay_users`, `supersay_events`, `supersay_daily_rollups`; RLS policies — events insert via anon role, service-role read, rollups public read.
   - **Why:** Foundation for every other backend task; RLS is what keeps the user list private.
   - **Files:** `himudigonda.me/supabase/migrations/*.sql` (new)
   - **Acceptance:** Migration applies cleanly to a fresh Supabase project; verified with `select` from anon role — anon can insert events but cannot read `supersay_users`.
   - **Risk:** Med — RLS misconfig leaks user list (requires ADR; see ADR flags below)
 
-- [ ] **S1-A3** — Nightly rollup cron
+- [x] **S1-A3** — Nightly rollup cron
   - **What:** Cron (Vercel cron or Supabase scheduled function) computes `supersay_daily_rollups` from raw events; idempotent on re-run.
   - **Why:** Public dashboard reads rollups (fast, no PII), never raw events.
   - **Files:** `himudigonda.me/pages/api/cron/supersay-rollup.ts` (new), `himudigonda.me/vercel.json`
   - **Acceptance:** Running the cron handler twice in a row produces an identical rollup row (verified by SQL diff); cron entry present in `vercel.json`.
   - **Risk:** Med — cron silently failing
 
-- [ ] **S1-A4** — Retention view
+- [x] **S1-A4** — Retention view
   - **What:** SQL view `supersay_retention_cohorts` materializing D1/D7/D30 by signup_date.
   - **Why:** Source-of-truth for the retention heatmap (F4).
   - **Files:** `himudigonda.me/supabase/migrations/*.sql`
@@ -73,42 +73,42 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track B — Backend / API routes (himudigonda.me)
 
-- [ ] **S1-B1** — `POST /api/supersay/events` (telemetry ingestion)
+- [x] **S1-B1** — `POST /api/supersay/events` (telemetry ingestion)
   - **What:** Replaces `/api/telemetry`. Accepts `{events:[...]}`, validates schema, drops unknown `props` keys, inserts to Supabase. Returns `{accepted, dropped}`. Rate-limited 60/min per actor_id.
   - **Why:** The single ingress point for all analytics; whitelist enforcement here is the public privacy promise.
   - **Files:** `himudigonda.me/pages/api/supersay/events.ts` (new), `himudigonda.me/pages/api/supersay/_lib/validate.ts` (new)
   - **Acceptance:** Unit test sends a payload with a `text` field and a forbidden `email` field — both are dropped before insert; response reports `dropped`. Bearer-JWT auth and anon both insert correctly. 61st request in a minute returns 429.
   - **Risk:** High — public ingestion endpoint; any leak voids the privacy story
 
-- [ ] **S1-B2** — Google OAuth exchange
+- [x] **S1-B2** — Google OAuth exchange
   - **What:** `POST /api/supersay/auth/google/exchange` accepts the Google OAuth `code` from the macOS loopback flow, exchanges with Google, creates/links Supabase user, returns Supabase session.
   - **Why:** Powers the Google sign-in button in the desktop app.
   - **Files:** `himudigonda.me/pages/api/supersay/auth/google.ts` (new)
   - **Acceptance:** Manual e2e — macOS app opens browser → user signs in with Google → callback returns to localhost → app holds Supabase JWT; session token round-trips via `/api/supersay/auth/whoami` (or equivalent).
   - **Risk:** Med — OAuth callback security (state + PKCE required)
 
-- [ ] **S1-B3** — Email auth endpoints
+- [x] **S1-B3** — Email auth endpoints
   - **What:** `POST /api/supersay/auth/email/signup`, `/login`, `/request-reset`, `/confirm-reset` — all backed by Supabase Auth.
   - **Why:** Cheaper friction path than Google for the email-comfortable crowd.
   - **Files:** `himudigonda.me/pages/api/supersay/auth/email/{signup,login,request-reset,confirm-reset}.ts` (new)
   - **Acceptance:** All four endpoints unit-tested; Supabase email templates configured; reset flow exercised manually end-to-end.
   - **Risk:** Low
 
-- [ ] **S1-B4** — `POST /api/supersay/auth/link-anon`
+- [x] **S1-B4** — `POST /api/supersay/auth/link-anon`
   - **What:** When an anon user signs in, attach their `anon_id` to the new user row so history doesn't reset publicly.
   - **Why:** Without this, the user "disappears" from rollups the moment they sign in — exactly the wrong incentive.
   - **Files:** `himudigonda.me/pages/api/supersay/auth/link-anon.ts` (new)
   - **Acceptance:** After sign-in, calling endpoint updates `supersay_users.anon_id`; events previously sent with that anon_id resolve to the signed user in the next rollup.
   - **Risk:** Med — double-attribution if two devices share an anon_id; document the resolution rule in the spec (A1)
 
-- [ ] **S1-B5** — Public metrics read endpoints
+- [x] **S1-B5** — Public metrics read endpoints
   - **What:** `/api/supersay/metrics/{overview,daily,voices,retention,audiobook}` — all read from `supersay_daily_rollups` + views, never raw events.
   - **Why:** Fast, cacheable, no PII risk; dashboard consumes these.
   - **Files:** `himudigonda.me/pages/api/supersay/metrics/{overview,daily,voices,retention,audiobook}.ts` (new)
   - **Acceptance:** Each endpoint returns JSON in <100ms (rollup tables, not raw); manual inspection confirms no PII in any response; OpenAPI shape matches spec A1.
   - **Risk:** Low
 
-- [ ] **S1-B6** — Deprecate legacy `/api/telemetry`
+- [x] **S1-B6** — Deprecate legacy `/api/telemetry`
   - **What:** Keep alive for one release returning 200 to old SuperSay 1.0.x clients; log and drop payload.
   - **Why:** Old installed apps keep working silently while we migrate.
   - **Files:** `himudigonda.me/pages/api/telemetry.ts` (touch)
@@ -119,21 +119,21 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track C — Frontend / macOS auth (SuperSay Swift)
 
-- [ ] **S1-C1** — `AuthService.swift`
+- [x] **S1-C1** — `AuthService.swift`
   - **What:** Google OAuth loopback flow (open browser to `https://himudigonda.me/supersay/oauth/start`, listen on `127.0.0.1:<random>`, receive code, exchange via B2); email/password forms call B3.
   - **Why:** The Swift-side engine for sign-in.
   - **Files:** `frontend/SuperSay/SuperSay/Services/AuthService.swift` (new)
   - **Acceptance:** XCTest with mocked network: Google exchange happy path stores token via `KeychainService`; email login likewise; loopback port collision (port in use) retries on a new port.
   - **Risk:** Med — loopback port collisions, OAuth state mismatch
 
-- [ ] **S1-C2** — `AuthViewModel.swift`
+- [x] **S1-C2** — `AuthViewModel.swift`
   - **What:** `@Published currentUser`, `isSignedIn`; sign-in/out/reset methods; error states.
   - **Why:** SwiftUI binding surface for SignInView/SignUpView/PreferencesView.
   - **Files:** `frontend/SuperSay/SuperSay/ViewModels/AuthViewModel.swift` (new)
   - **Acceptance:** XCTest covers state transitions: anon → signing → signed → signed-out; error states populate `lastError` and clear on retry.
   - **Risk:** Low
 
-- [ ] **S1-C3** — SignIn / SignUp views
+- [x] **S1-C3** — SignIn / SignUp views
   - **What:** Minimal SwiftUI — three buttons (Google, email-existing, email-new), inline errors, "Skip for now" always present.
   - **Why:** The actual UI the user sees during the onboarding nudge and from Preferences.
   - **Files:** `frontend/SuperSay/SuperSay/Views/Auth/SignInView.swift` (new), `frontend/SuperSay/SuperSay/Views/Auth/SignUpView.swift` (new)
@@ -147,7 +147,7 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
   - **Acceptance:** Token round-trips (store → read → match); cleared on sign-out (verified with `security` CLI on the test keychain).
   - **Risk:** Low
 
-- [ ] **S1-C5** — Account section in Preferences
+- [x] **S1-C5** — Account section in Preferences
   - **What:** Show signed-in email + sign-out button; show "Sign in to count" CTA when anon.
   - **Why:** Surface the auth state outside onboarding so the nudge remains discoverable.
   - **Files:** `frontend/SuperSay/SuperSay/Views/PreferencesView.swift` (touch)
@@ -221,35 +221,35 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
 
 ### Track F — Dashboard (himudigonda-metrics-dashbaord)
 
-- [ ] **S1-F1** — SuperSay overview cards
+- [x] **S1-F1** — SuperSay overview cards
   - **What:** New SuperSay tab/section: users, DAU, WAU, total calls, total audio hours — all from `/api/supersay/metrics/overview`.
   - **Why:** The numbers we point at in the public post.
   - **Files:** `himudigonda-metrics-dashbaord/app/supersay/page.tsx` (new), `himudigonda-metrics-dashbaord/lib/supersay-api.ts` (new)
   - **Acceptance:** Live data renders against the deployed API; mock fallback when API down; cards show actual numerals not placeholders.
   - **Risk:** Low
 
-- [ ] **S1-F2** — Daily trend chart
+- [x] **S1-F2** — Daily trend chart
   - **What:** Recharts line chart — users + generations + audio hours over last 90 days.
   - **Why:** The "is it growing?" chart for screenshots.
   - **Files:** `himudigonda-metrics-dashbaord/app/supersay/page.tsx`
   - **Acceptance:** Recharts line chart with sane Y axes and a tooltip showing the date + three values on hover; renders against seeded data.
   - **Risk:** Low
 
-- [ ] **S1-F3** — Voice distribution chart
+- [x] **S1-F3** — Voice distribution chart
   - **What:** Donut or bar chart from `/api/supersay/metrics/voices`.
   - **Why:** Shows the long tail of Kokoro voices people actually use.
   - **Files:** `himudigonda-metrics-dashbaord/app/supersay/page.tsx`
   - **Acceptance:** Chart renders all configured voices, sorted by usage; reads `/api/supersay/metrics/voices`.
   - **Risk:** Low
 
-- [ ] **S1-F4** — Retention cohort grid
+- [x] **S1-F4** — Retention cohort grid
   - **What:** D1/D7/D30 heatmap by week.
   - **Why:** Retention is the question every founder gets asked on HN — must have a chart.
   - **Files:** `himudigonda-metrics-dashbaord/app/supersay/page.tsx`
   - **Acceptance:** Reads `/api/supersay/metrics/retention`; renders even when sample size is small (empty cells styled, not crashing); axis labels show signup week + day cohort.
   - **Risk:** Med — sparse data looks ugly; needs a "small sample" notice
 
-- [ ] **S1-F5** — Audiobook funnel section
+- [x] **S1-F5** — Audiobook funnel section
   - **What:** Uploads → pages → audio-seconds → completed funnel.
   - **Why:** Audiobook is the differentiating feature — funnel quantifies whether it gets used.
   - **Files:** `himudigonda-metrics-dashbaord/app/supersay/page.tsx`
@@ -267,14 +267,14 @@ props         jsonb         -- counts only: {chars, voice, speed, audio_seconds,
   - **Acceptance:** All logs JSON; each request carries a correlation id propagated via header; verified by tailing the dev server during one e2e session.
   - **Risk:** Low
 
-- [ ] **S1-G2** — Normalized API error responses
+- [x] **S1-G2** — Normalized API error responses
   - **What:** `{error: {code, message}}` everywhere on `himudigonda.me/api/supersay/*` — never raw exceptions.
   - **Why:** Clients (Swift app, dashboard) get a consistent shape; no stack traces leak to public callers.
   - **Files:** `himudigonda.me/pages/api/supersay/_lib/errors.ts` (new) + apply in all B-track endpoints
   - **Acceptance:** Each endpoint returns the consistent shape on failure; test asserts no stack trace string appears in any non-2xx response body.
   - **Risk:** Med
 
-- [ ] **S1-G3** — Rate limits
+- [x] **S1-G3** — Rate limits
   - **What:** Rate limits on all `/api/supersay/auth/*` and `/events` (Upstash Redis or in-memory token bucket on Vercel edge).
   - **Why:** Public endpoints — DoS is a real risk.
   - **Files:** `himudigonda.me/pages/api/supersay/_lib/ratelimit.ts` (new)

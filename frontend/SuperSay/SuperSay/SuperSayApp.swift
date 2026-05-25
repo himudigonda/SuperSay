@@ -21,6 +21,9 @@ struct SuperSayApp: App {
     /// First-launch + onboarding state (S1-E3).
     @StateObject private var onboarding = OnboardingCoordinator()
 
+    /// Auth state (S1-C2). Wires MetricsService's bearer provider in init.
+    @StateObject private var auth = AuthViewModel()
+
     /// 3. Backend (Kept private, managed by VM, but we own the instance to stop deinit)
     private let backend: BackendService
 
@@ -173,6 +176,7 @@ struct SuperSayApp: App {
                 .environmentObject(launchManager)
                 .environmentObject(audiobookVM)
                 .environmentObject(onboarding)
+                .environmentObject(auth)
         }
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["dashboard"])
