@@ -1,5 +1,8 @@
 # 🗺️ SuperSay Roadmap
 
+Sprint tracking: see [`SPRINTS.md`](./SPRINTS.md) (active: Sprint 1 — Accounts + Analytics + Onboarding v1.1).
+
+
 ## 🟢 Phase 1: Core Engine (Complete)
 
 - [x] Local Kokoro ONNX Inference.
