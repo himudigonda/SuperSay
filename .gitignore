@@ -22,6 +22,15 @@ backend/local_settings.py
 backend/*.spec
 backend/.python-version
 
+# --- Test artifacts ---
+backend/.coverage
+backend/.coverage_html/
+backend/htmlcov/
+backend/.mutmut-cache
+backend/mutants/
+.pytest_cache/
+.hypothesis/
+
 # --- Large AI Models (Download these manually) ---
 # Git handles files >100MB poorly. These should stay local.
 *.onnx
