@@ -172,6 +172,7 @@ Optional cloud setup (only if you want sign-in + dashboard locally) — see [`do
 | [📊 Analytics](./docs/analytics.md) | Event pipeline, rollup formulas, sample SQL. |
 | [📝 Spec — Accounts + Analytics](./docs/specs/accounts-analytics.md) | The v2.0 sign-in / telemetry contract. |
 | [🏃 Sprints](./docs/SPRINTS.md) | Sprint-by-sprint task ledger. |
+| [🧪 Testing](./docs/testing.md) | The test pyramid per repo, coverage policy, red-team contract. |
 | [⚙️ v2.0 Setup](./docs/setup-v1.1.md) | One-page checklist for deploying the cloud half (Supabase, Vercel, Google OAuth). |
 
 ---
