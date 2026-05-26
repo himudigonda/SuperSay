@@ -1,0 +1,67 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: '0.5.x'
+      - name: Set up Python
+        run: uv python install 3.11
+      - name: Install dependencies
+        working-directory: backend
+        run: uv sync --frozen --no-install-project || uv sync
+      - name: Lint
+        working-directory: backend
+        run: |
+          uv run ruff check .
+          uv run black --check .
+      - name: Tests
+        working-directory: backend
+        run: uv run pytest -q
+      - name: Coverage
+        working-directory: backend
+        run: uv run pytest --cov=app --cov-report=term --cov-fail-under=70
+
+  swift:
+    name: Swift (xcodebuild)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app || sudo xcode-select -s /Applications/Xcode.app
+      - name: Cache DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: ${{ runner.os }}-deriveddata-${{ hashFiles('frontend/SuperSay/SuperSay.xcodeproj/project.pbxproj') }}
+          restore-keys: |
+            ${{ runner.os }}-deriveddata-
+      - name: Stub backend zip (so LaunchManager bundle path resolves)
+        run: |
+          mkdir -p frontend/SuperSay/SuperSay/Resources
+          touch frontend/SuperSay/SuperSay/Resources/SuperSayServer.zip
+      - name: Build + test
+        run: |
+          xcodebuild test \
+            -project frontend/SuperSay/SuperSay.xcodeproj \
+            -scheme SuperSay \
+            -destination 'platform=macOS,arch=arm64' \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+          # xcpretty exits 0 even on test failure; re-check with --resultBundlePath
+          xcodebuild test \
+            -project frontend/SuperSay/SuperSay.xcodeproj \
+            -scheme SuperSay \
+            -destination 'platform=macOS,arch=arm64' \
+            CODE_SIGNING_ALLOWED=NO
