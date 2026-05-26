@@ -4,7 +4,190 @@ Sprint tracker for SuperSay. Each sprint section is appended at the top. Tasks l
 
 ---
 
-## Sprint 1 — Active (planned 2026-05-25) — Accounts + Analytics + Onboarding (v1.1)
+## Sprint 2 — Active (planned 2026-05-26) — Test-hardening (v2.0.1)
+
+> **Theme:** v2.0.0 shipped — now make the test suite worthy of the privacy claim. Apply the test pyramid (unit / integration / contract / property / e2e), honor the working-agreement coverage floors (85% services, 80% routes, 95% utilities), and elevate **100% coverage on privacy- and auth-critical files** (`MetricsService.swift`, `AuthService.swift`, `pages/api/supersay/events.js`, `lib/supersay-validate.js`). A dedicated **red-team test file** in both client and server is the load-bearing test that backs PRIVACY.md publicly. CI runs every push; mutation testing nightly.
+>
+> **Scope honesty:** Three repos, 18 atomic commits. No new product features. Two sister repos (himudigonda.me, dashboard) had zero tests on the v2.0 code — that gap is the entire reason this sprint exists.
+>
+> **Charter note:** Coverage floors come from the global working agreement. Mutation testing is new tooling, but `mutmut`/`stryker` are MIT-licensed and dev-only — no runtime dependencies added.
+
+### Locked decisions
+
+| Decision | Choice |
+|---|---|
+| Scope | All three repos (privacy contract spans them) |
+| Coverage | 85/80/95 floors + **100% on the four privacy/auth-critical files** |
+| Test types | unit, integration, contract, property (Hypothesis), snapshot (SwiftUI), red-team (Swift + JS), mutation (nightly) |
+| Swift e2e | XCUITest onboarding happy path only |
+| CI | GitHub Actions per repo; mutation nightly only |
+| Sprint shape | Single sprint, atomic commits |
+
+### Cuts (explicit)
+
+- No load testing (no need at free-tier scale).
+- No Pact / consumer-driven contract testing (OpenAPI snapshot suffices).
+- No Playwright on the dashboard (vitest + RTL covers it).
+- No visual regression on Recharts (snapshot diffs flake on SVG).
+- No retroactive tests for pre-v2.0 modules unless touched.
+
+---
+
+### Foundation
+
+- [ ] **S2-F1** — CI scaffolding for SuperSay
+  - **What:** `.github/workflows/test.yml` runs `make lint && make test` on macOS-14 + ubuntu-latest (Python only). Cache `~/Library/Developer/Xcode/DerivedData` and `~/.cache/uv`.
+  - **Why:** Comprehensive testing stays comprehensive only with CI enforcement.
+  - **Files:** `.github/workflows/test.yml` (new)
+  - **Acceptance:** Workflow green on a no-op PR.
+  - **Risk:** Low — macOS runner minutes are free for public repos.
+
+- [ ] **S2-F2** — Jest + CI for himudigonda.me API routes
+  - **What:** Jest + `node-mocks-http` (Next.js pages-router style) + `@supabase/supabase-js` mocked at the module boundary. Workflow runs `pnpm test`.
+  - **Why:** Zero tests today on the public ingest endpoint — largest gap.
+  - **Files:** `himudigonda.me/jest.config.js` (new), `himudigonda.me/package.json` (touch), `himudigonda.me/.github/workflows/test.yml` (new)
+  - **Acceptance:** `pnpm test` green; one smoke test for `lib/supersay-validate.js` passes.
+  - **Risk:** Med — Supabase mocking discipline.
+
+- [ ] **S2-F3** — Vitest + CI for metrics dashboard
+  - **What:** Vitest + React Testing Library + MSW + jsdom.
+  - **Why:** Same reason — zero coverage on the public dashboard surface.
+  - **Files:** `himudigonda-metrics-dashbaord/vitest.config.ts` (new), `package.json` (touch), `.github/workflows/test.yml` (new)
+  - **Acceptance:** `pnpm test` green; one smoke test for the API client.
+  - **Risk:** Low.
+
+- [ ] **S2-F4** — Coverage + mutation tooling wiring
+  - **What:** `pytest-cov` (already present, configure threshold), `hypothesis`, `mutmut` in `pyproject.toml`. Swift test plan enables code coverage. `@stryker-mutator/core` + `@stryker-mutator/jest-runner` in himudigonda.me. `make test-coverage` and `make test-mutation` targets.
+  - **Why:** Coverage and mutation are how we know the tests are real, not theatre.
+  - **Files:** `backend/pyproject.toml`, `frontend/SuperSay/SuperSay.xcodeproj/xcshareddata/xcschemes/*.xcscheme`, `Makefile`, `himudigonda.me/package.json`
+  - **Acceptance:** `make test-coverage` prints a per-module table; `make test-mutation` runs mutmut on the scoped privacy modules.
+  - **Risk:** Low; mutation is opt-in.
+
+---
+
+### Content — backend (Python)
+
+- [ ] **S2-B1** — Property-based tests (Hypothesis)
+  - **What:** `tests/test_properties.py` — sentence-splitter reassembly invariants, `clip16` range invariants (no NaN/Inf), config sanitization, logging extras safety.
+  - **Why:** Property tests find the edge cases unit tests miss.
+  - **Files:** `backend/tests/test_properties.py` (new)
+  - **Acceptance:** ≥ 4 properties, 200 examples each in dev / 1000 in nightly.
+  - **Risk:** Low.
+
+- [ ] **S2-B2** — Contract + correlation middleware tests
+  - **What:** `test_correlation.py` — every response carries `X-Correlation-ID`; inbound id is echoed. `test_streaming_contract.py` — `/speak` chunk shape matches PCM contract; `/health` JSON shape matches contract.
+  - **Why:** Lock the wire format so frontend changes don't silently break it.
+  - **Files:** `backend/tests/test_correlation.py` (new), `backend/tests/test_streaming_contract.py` (new)
+  - **Acceptance:** All assertions pass; correlation id present on 200, 4xx, and 5xx paths.
+  - **Risk:** Low.
+
+- [ ] **S2-B3** — Backend coverage gap fill
+  - **What:** Bring `core/config.py`, `core/logging.py`, `services/gemini_cleaner.py` over 85% on touched lines.
+  - **Why:** Working-agreement coverage floor.
+  - **Files:** `backend/tests/test_config.py` (new), expansions to `test_logging.py`, `test_gemini_cleaner.py` (new or expand).
+  - **Acceptance:** `uv run pytest --cov=app --cov-report=term-missing` shows ≥ 85% on each.
+  - **Risk:** Low.
+
+---
+
+### Content — Swift app
+
+- [ ] **S2-S1** — MetricsService red-team tests (load-bearing)
+  - **What:** `SuperSayTests/MetricsServiceRedTeamTests.swift` — adversarial payloads (`text`, `email`, `prompt`, full prose, unicode lookalike keys like `tеxt` with Cyrillic 'е', nested dicts, arrays of strings, base64-encoded text). Assert all dropped by `Props.allowedKeys` filter. Assert serialized JSON output contains none of the adversarial values byte-wise.
+  - **Why:** This file IS the privacy promise. Reviewed line-by-line; CI-required.
+  - **Files:** `frontend/SuperSay/SuperSayTests/MetricsServiceRedTeamTests.swift` (new)
+  - **Acceptance:** 12+ adversarial cases all dropped; byte-wise grep of outbound JSON shows no leaked content.
+  - **Risk:** High — by definition this is the test we cannot get wrong.
+
+- [ ] **S2-S2** — AuthService integration tests
+  - **What:** `URLProtocol` stub for HTTP; PKCE code_verifier length (43–128), challenge correctness (S256), Keychain round-trip, sign-out clears keychain, loopback port `0` retries on collision.
+  - **Files:** `frontend/SuperSay/SuperSayTests/AuthServiceIntegrationTests.swift` (new)
+  - **Acceptance:** Each behavior covered by a named test; no real network access.
+  - **Risk:** Med — loopback ephemeral port plumbing.
+
+- [ ] **S2-S3** — ViewModel state-machine tests
+  - **What:** Table-driven tests — given (state, event) → expected new state. Cover anon → signing → signed → signed-out; speak idle → streaming → playing → done + cancellation; audiobook upload → processing → ready.
+  - **Files:** `frontend/SuperSay/SuperSayTests/{AuthViewModel,DashboardViewModel,AudiobookViewModel}StateMachineTests.swift`
+  - **Acceptance:** ≥ 20 (state, event) rows covered.
+  - **Risk:** Med — needs injectable fakes for `BackendService`/`AuthService`.
+
+---
+
+### Content — himudigonda.me API
+
+- [ ] **S2-H1** — Server-side red-team + validator tests
+  - **What:** `__tests__/validate.test.js` — same adversarial payload taxonomy as S2-S1 but server-side. `__tests__/events.test.js` — body cap (50 events), rate limit 429, bearer-JWT + anon both insert, dropped_keys reported.
+  - **Why:** Defense-in-depth — the server is the second wall.
+  - **Files:** `himudigonda.me/lib/__tests__/supersay-validate.test.js` (new), `himudigonda.me/pages/api/supersay/__tests__/events.test.js` (new)
+  - **Acceptance:** 12+ adversarial inputs dropped; rate limit fires; SQL injection in `actor_id` rejected by parameterization.
+  - **Risk:** High — same load-bearing privacy proof on the server side.
+
+- [ ] **S2-H2** — Auth route tests
+  - **What:** `google.test.js` (PKCE state expiry, code exchange happy + error), `email/{signup,login,request-reset,confirm-reset}.test.js`, `link-anon.test.js` (conflict logs).
+  - **Files:** `himudigonda.me/pages/api/supersay/auth/__tests__/*.test.js`
+  - **Acceptance:** Each route has happy + at least two failure cases.
+  - **Risk:** Med — Supabase auth client mock surface area.
+
+- [ ] **S2-H3** — Metrics endpoint contract tests
+  - **What:** Each `/metrics/*` endpoint: response has correct shape, no PII regex matches, `Cache-Control: public, max-age=300` header.
+  - **Files:** `himudigonda.me/pages/api/supersay/metrics/__tests__/*.test.js`
+  - **Acceptance:** All five endpoints covered.
+  - **Risk:** Low.
+
+- [ ] **S2-H4** — Cron + legacy telemetry tests
+  - **What:** Rollup function idempotent on re-run (assert row hash identical). Legacy `/api/telemetry` returns 200 for old clients and logs once.
+  - **Files:** `himudigonda.me/pages/api/cron/__tests__/supersay-rollup.test.js`, `himudigonda.me/pages/api/__tests__/telemetry.test.js`
+  - **Acceptance:** Two invocations of rollup with same seeded data produce same rollup row.
+  - **Risk:** Low.
+
+---
+
+### Content — dashboard
+
+- [ ] **S2-D1** — Dashboard component + API client tests
+  - **What:** MSW mocks each `/api/supersay/metrics/*` response. `pages/index.test.tsx` asserts overview cards render values, retention grid handles sparse data (sample_size_warning banner shown), voice chart sorts desc, funnel renders.
+  - **Files:** `src/lib/__tests__/supersay-api.test.ts`, `src/pages/__tests__/index.test.tsx`
+  - **Acceptance:** All five chart sections render against MSW fixtures.
+  - **Risk:** Low.
+
+---
+
+### Tooling polish + docs
+
+- [ ] **S2-M1** — Mutation testing configs
+  - **What:** `mutmut` scoped to `app/services/audio.py::clip16` and `app/api/middleware.py` validators. `stryker.conf.json` scoped to `lib/supersay-validate.js` and `pages/api/supersay/events.js`. Nightly workflow runs both.
+  - **Files:** `backend/setup.cfg` (mutmut config), `himudigonda.me/stryker.conf.json`, `.github/workflows/mutation-nightly.yml` per repo
+  - **Acceptance:** First run reports a mutation score; surviving mutants logged.
+  - **Risk:** Med — slow. Capped by file-scope.
+
+- [ ] **S2-T1** — docs/testing.md + Sprint 2 retro
+  - **What:** Document the test pyramid per repo, the coverage policy, the red-team test as the load-bearing privacy proof, and how to add a test alongside a new event.
+  - **Files:** `docs/testing.md` (new), `docs/SPRINTS.md` (this file — Done block + retro)
+  - **Acceptance:** Linked from README; Sprint 2 done block populated.
+  - **Risk:** Low.
+
+---
+
+### Definition of done
+
+- [ ] `make test` green on SuperSay; `pnpm test` green on both sister repos.
+- [ ] Coverage: ≥ 85/80/95 floors; **100% on the four privacy/auth-critical files**.
+- [ ] Red-team test files exist in both client (Swift) and server (JS) and assert the same adversarial taxonomy.
+- [ ] GitHub Actions workflows green on the v2.0.1 commit series in all three repos.
+- [ ] `docs/testing.md` exists and is linked from the project README.
+- [ ] Total test count delta documented in this file's Sprint 2 retro.
+
+### Out of scope (deferred)
+
+- Load testing / k6 / artillery.
+- Browser e2e for the dashboard (Playwright).
+- Pact / consumer-driven contract testing.
+- Visual regression on Recharts SVG output.
+- Retroactive coverage of pre-v2.0 modules unless touched in this sprint.
+
+---
+
+## Sprint 1 — Done (planned 2026-05-25) — Accounts + Analytics + Onboarding (v1.1)
 
 > **Theme:** Ship optional Google + email/password sign-in via Supabase, a privacy-first telemetry rewrite (counts only — no text, no samples), a 5-step onboarding flow with a transparent sign-in nudge, an expanded public dashboard (retention, voices, audiobook funnel), and the production-grade polish (structured logs, normalized errors, rate limits, test coverage, `PRIVACY.md`) needed to back the v1.1 growth posts with real numbers.
 >
