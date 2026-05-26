@@ -10,7 +10,7 @@
 *   `docs/specs/accounts-analytics.md` + `docs/analytics.md` + `docs/setup-v1.1.md` deploy checklist.
 
 #### 📚 Audiobook Feature
-*   Full PDF-to-audiobook pipeline: upload PDF → Gemini 1.5 Flash cleans text → Kokoro/KittenTTS narrates → single seekable WAV with chapter markers.
+*   Full PDF-to-audiobook pipeline: upload PDF → Gemini 2.5 Flash cleans text → Kokoro narrates → single seekable WAV with chapter markers.
 *   Audible-style player: scrub bar, chapter list, sleep timer, live transcript, cover art with ambient gradient.
 *   **OCR for scanned PDFs:** image-only pages now automatically processed via Gemini vision — no more 422 rejections.
 *   Per-page resumability; interrupted books resume at the last completed page.
@@ -23,9 +23,10 @@
 *   93 backend tests passing.
 
 #### 🏎️ TTS Engine
-*   KittenTTS nano/micro/mini variants with lookahead inference cache (sub-20ms cache-hit TTFA).
-*   Removed `allow_spinning=1` — fixes 800-900% idle CPU on Apple Silicon.
-*   `audio_seconds` metric is sourced from `AudioService`'s rendered PCM frame count, not estimated — accurate to the millisecond.
+*   **Kokoro-only.** KittenTTS variants removed in this release — Kokoro-82M is the sole inference path. Eight voices: `af_bella`, `af_sarah`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`.
+*   Lookahead inference cache (sub-20ms cache-hit TTFA on common phrasing).
+*   Sentence-sequential inference (single-worker pool) to prevent espeak-ng race conditions; concurrency lives at the streaming layer, not the inference layer.
+*   `audio_seconds` metric is sourced from `AudioService`'s rendered PCM frame count, not estimated — accurate to the frame.
 
 #### 🖥️ macOS UI
 *   NavigationStack-based audiobook player (keyboard shortcuts, sidebar stays visible).

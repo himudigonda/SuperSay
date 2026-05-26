@@ -1,9 +1,9 @@
 # 🎙️ SuperSay
 
-> **Turn any text on your Mac into cinematic, ultra-realistic AI speech.**
+> **Turn any text — or any PDF — on your Mac into cinematic, ultra-realistic AI speech. Fully on-device.**
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0.6-blue?style=for-the-badge" alt="Version" />
+  <img src="https://img.shields.io/badge/version-2.0.0-blue?style=for-the-badge" alt="Version" />
   <img src="https://img.shields.io/badge/status-production-success?style=for-the-badge" alt="Status" />
   <img src="https://img.shields.io/badge/macOS-14.0+-000000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS" />
   <img src="https://img.shields.io/badge/Apple_Silicon-Native-007AFF?style=for-the-badge&logo=apple&logoColor=white" alt="Apple Silicon" />
@@ -15,7 +15,7 @@
 
 <p align="center">
   <b>Fast. Private. Local. Cinematic.</b><br>
-  <i>The last TTS tool you'll ever need for macOS.</i>
+  <i>TTS + audiobook generation that never sends your text to a server.</i>
 </p>
 
 <p align="center">
@@ -46,6 +46,7 @@ After running it, double-click the app normally. macOS will open it without comp
   - [🚀 Quick Start — Run This First](#-quick-start--run-this-first)
   - [📖 Table of Contents](#-table-of-contents)
   - [✨ Key Features](#-key-features)
+  - [🔒 Privacy in one sentence](#-privacy-in-one-sentence)
   - [🏗️ Architecture at a Glance](#️-architecture-at-a-glance)
   - [⌨️ Global Shortcuts](#️-global-shortcuts)
   - [🛠 Developer Quickstart](#-developer-quickstart)
@@ -55,11 +56,21 @@ After running it, double-click the app normally. macOS will open it without comp
 
 ## ✨ Key Features
 
-- **🔒 100% Offline:** All inference happens on your silicon. No data ever leaves your machine.
-- **⚡️ Zero-Latency Streaming:** Audio starts in <200ms. The engine infers future sentences while current ones play.
-- **🎓 Academic Mode:** Specialized PDF cleaning for research papers. Automatically strips citations `[1, 2]`.
-- **🎬 Cinematic Ducking:** Automatically lowers Spotify/Apple Music volume while speaking.
-- **📦 Zero-Dependency:** Everything (Python, ONNX, Phonemizers) is bundled into a single app.
+- **🔒 100% Offline TTS:** All Kokoro inference happens on your Apple Silicon. Your text never leaves your machine.
+- **⚡️ Zero-Latency Streaming:** Audio starts in <200ms. The engine streams sentence-by-sentence while later sentences still render.
+- **🎧 8 Cinematic Voices:** Eight Kokoro voices across American and British accents — `af_bella`, `af_sarah`, `am_adam`, `am_michael`, `bf_emma`, `bf_isabella`, `bm_george`, `bm_lewis`. Speed 0.5×–2.0×, independent volume control with system-audio ducking.
+- **📚 PDF → Audiobook:** Drop a PDF and SuperSay turns it into a seekable audiobook with chapter markers, transcript view, sleep timer, and per-page resumability. Optionally uses your Gemini key for OCR + text cleaning on scanned PDFs.
+- **🔐 Optional Sign-In:** Sign in with Google or email (Supabase Auth) only if you want to count yourself in the public usage stats. App works identically signed in or anonymous. Sign-in never gates functionality.
+- **📊 Transparent Analytics:** Counts only — never your text. Closed whitelist enforced on client AND server. Toggleable in Preferences. Every byte that leaves the Mac is documented in [PRIVACY.md](./PRIVACY.md) with `file:line` references into the source.
+- **📦 Zero-Dependency:** Python, ONNX, espeak-ng, models all bundled into a single app. No `brew install`, no `pip`, no setup.
+
+---
+
+## 🔒 Privacy in one sentence
+
+> **SuperSay runs fully on your Mac. Your text never leaves this machine. Signing in only helps us count how many people use SuperSay and how much audio gets generated. We never read what you type.**
+
+See [PRIVACY.md](./PRIVACY.md) for the full audit — every network destination, every byte sent, every line of code that does the sending, with `file:line` references.
 
 ---
 
@@ -69,48 +80,47 @@ SuperSay uses a high-performance **Python/ONNX** inference engine wrapped in a n
 
 ```mermaid
 graph TD
-    %% Define Styles
     classDef frontend fill:#3498db,stroke:#2980b9,color:#fff,stroke-width:2px;
     classDef backend fill:#2ecc71,stroke:#27ae60,color:#fff,stroke-width:2px;
     classDef model fill:#e67e22,stroke:#d35400,color:#fff,stroke-width:2px;
-    classDef stream fill:#9b59b6,stroke:#8e44ad,color:#fff,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef cloud fill:#9b59b6,stroke:#8e44ad,color:#fff,stroke-width:2px,stroke-dasharray: 5 5;
 
-    %% Components
-    subgraph macOS_App ["SwiftUI Frontend (The Consumer)"]
-        UI["Global Hotkey / UI"]:::frontend
+    subgraph macOS_App ["SwiftUI Frontend"]
+        UI["Global Hotkey / UI / Onboarding"]:::frontend
         AS["AudioService (AVAudioEngine)"]:::frontend
-        BM["Buffer Manager"]:::frontend
+        MS["MetricsService (counts only)"]:::frontend
+        Auth["AuthService (optional sign-in)"]:::frontend
     end
 
-    subgraph Inference_Engine ["Python Backend (The Producer)"]
+    subgraph Inference_Engine ["Local Python Backend (bundled)"]
         API["FastAPI /localhost:10101/"]:::backend
-        SS["Sentence Splitter"]:::backend
-        PI["Parallel Inference Queue"]:::backend
-        ST["Async Stream Generator"]:::backend
+        TTSEng["TTSEngine (sentence-sequential)"]:::backend
+        BookSvc["AudiobookService + Gemini cleaner"]:::backend
     end
 
-    subgraph Core ["Local Intelligence"]
+    subgraph Core ["On-device intelligence"]
         ONNX["Kokoro-82M (ONNX)"]:::model
-        EP["espeak-ng (Phonemizer)"]:::model
+        EP["espeak-ng (phonemizer)"]:::model
     end
 
-    %% Connections
-    UI -->|Trigger| AS
-    AS -->|HTTP POST /speak| API
-    API --> SS
-    SS --> PI
-    PI --> ONNX
-    ONNX --> EP
-    ONNX -->|PCM Chunks| ST
-    ST -.->|HTTP Chunked Stream| BM
-    BM -->|AVAudioPCMBuffer| AS
-    AS -->|System Audio| Speakers["🔊 Mac Speakers"]
+    subgraph Cloud ["Optional cloud — counts only"]
+        HM["himudigonda.me /api/supersay/*"]:::cloud
+        SB["Supabase (events + rollups)"]:::cloud
+    end
 
-    %% Class Assigning
-    class UI,AS,BM frontend
-    class API,SS,PI,ST backend
-    class ONNX,EP model
+    UI -->|trigger| AS
+    AS -->|POST /speak text| API
+    API --> TTSEng --> ONNX --> EP
+    TTSEng -->|PCM chunks| AS
+    UI -->|drop PDF| BookSvc
+    BookSvc --> ONNX
+    AS -->|🔊| Speakers["Mac Speakers"]
+    MS -.->|batched counts| HM
+    Auth -.->|optional| HM
+    HM --> SB
 ```
+
+Audio synthesis path is fully local. The cloud path (dashed) carries only counts and audio durations — never text, never file contents, never audio.
 
 ---
 
@@ -122,6 +132,8 @@ graph TD
 | **Play / Pause** | `Cmd + Shift + /` |
 | **Stop Playback** | `Cmd + Shift + ,` |
 | **Export to Desktop** | `Cmd + Shift + M` |
+
+Hotkeys are remappable in Preferences.
 
 ---
 
@@ -136,22 +148,31 @@ make run
 
 # 3. Run Tests
 make test
+
+# 4. Build a release DMG
+make release VERSION=2.0.0
 ```
+
+Optional cloud setup (only if you want sign-in + dashboard locally) — see [`docs/setup-v1.1.md`](./docs/setup-v1.1.md).
 
 ---
 
 ## 📚 Project Documentation
 
-Explore our detailed guides to learn more about the internals of SuperSay:
-
 | Doc | Description |
 | :--- | :--- |
-| [🏗️ Architecture](./docs/architecture.md) | Producer-Consumer model & Parallel Streaming details. |
-| [📖 User Guide](./docs/USER_GUIDE.md) | Feature walkthroughs and troubleshooting. |
-| [🤝 Contributing](./docs/CONTRIBUTING.md) | Engineering workflow and priority tasks. |
-| [🗺️ Roadmap](./docs/ROADMAP.md) | Past milestones and future phase planning. |
+| [🏗️ Architecture](./docs/architecture.md) | Producer-Consumer model & parallel streaming details. |
+| [📖 User Guide](./docs/USER_GUIDE.md) | Feature walkthroughs, audiobook flow, troubleshooting. |
+| [🤝 Contributing](./docs/CONTRIBUTING.md) | Engineering workflow and priorities. |
+| [🗺️ Roadmap](./docs/ROADMAP.md) | Past milestones, current sprint, future phases. |
 | [🚀 Release](./docs/release.md) | Build and deployment SOP. |
 | [🐍 Backend](./backend/README.md) | Technical specs for the Python inference engine. |
+| [🍎 Frontend](./frontend/README.md) | SwiftUI app structure, services, view models. |
+| [🔒 Privacy](./PRIVACY.md) | Every byte that leaves the Mac, with `file:line` audit trail. |
+| [📊 Analytics](./docs/analytics.md) | Event pipeline, rollup formulas, sample SQL. |
+| [📝 Spec — Accounts + Analytics](./docs/specs/accounts-analytics.md) | The v2.0 sign-in / telemetry contract. |
+| [🏃 Sprints](./docs/SPRINTS.md) | Sprint-by-sprint task ledger. |
+| [⚙️ v2.0 Setup](./docs/setup-v1.1.md) | One-page checklist for deploying the cloud half (Supabase, Vercel, Google OAuth). |
 
 ---
 
