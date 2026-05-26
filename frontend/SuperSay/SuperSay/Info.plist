@@ -26,7 +26,7 @@
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
 	<key>SuperSayGoogleClientID</key>
-	<string></string>
+	<string>439655936296-hqg25sns9js4v3l4g1bfa5fmvhc6ki4f.apps.googleusercontent.com</string>
 	<key>LSEnvironment</key>
 	<dict>
 		<key>LLVM_PROFILE_FILE</key>
