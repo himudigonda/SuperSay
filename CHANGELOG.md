@@ -1,4 +1,13 @@
-### 🚀 SuperSay v2.0 Changelog
+### 🚀 SuperSay v2.0.0 Changelog
+
+#### 🔐 Accounts + Analytics (new)
+*   **Optional sign-in** — Google OAuth (desktop loopback + PKCE) and email/password via Supabase Auth. App works identically signed-in or anonymous.
+*   **5-step onboarding** with a transparent privacy nudge: "we count you, never read your text." Skip always available.
+*   **Counts-only telemetry**, defense-in-depth — closed props whitelist enforced on client AND server. `text`, `email`, and any unknown keys are dropped before HTTP serialization; the server re-validates before insert. Raw text, file contents, and audio never cross the network boundary.
+*   `MetricsService` v2: batched outbox (20 events / 30s), persisted across restarts in `UserDefaults`, Bearer-when-signed + anon_id-always, hard kill switch via `telemetryEnabled` toggle.
+*   **Public metrics dashboard** at the metrics site — total users, DAU/WAU, generations, audio-hours, voice distribution, D1/D7/D30 retention cohorts, audiobook funnel. All reads from nightly daily rollups; never raw events.
+*   `PRIVACY.md` with `file:line` audit trail — every byte that leaves the Mac is documented with a reference into the code.
+*   `docs/specs/accounts-analytics.md` + `docs/analytics.md` + `docs/setup-v1.1.md` deploy checklist.
 
 #### 📚 Audiobook Feature
 *   Full PDF-to-audiobook pipeline: upload PDF → Gemini 1.5 Flash cleans text → Kokoro/KittenTTS narrates → single seekable WAV with chapter markers.
@@ -10,17 +19,27 @@
 *   **Migrated to `google-genai` 2.0.0** (replaces deprecated `google-generativeai`). All calls use native async (`client.aio`).
 *   Section detection via Gemini; falls back to PDF outline bookmarks when available.
 *   SQLite (WAL mode) metadata store — replaces per-book `meta.json`; auto-migrates on startup.
-*   81 backend tests passing.
+*   **Structured JSON logging** on every backend log line, with a request correlation id propagated via `X-Correlation-ID` header. Replaces ad-hoc `print()` calls; no new dependencies (stdlib only).
+*   93 backend tests passing.
 
 #### 🏎️ TTS Engine
 *   KittenTTS nano/micro/mini variants with lookahead inference cache (sub-20ms cache-hit TTFA).
 *   Removed `allow_spinning=1` — fixes 800-900% idle CPU on Apple Silicon.
+*   `audio_seconds` metric is sourced from `AudioService`'s rendered PCM frame count, not estimated — accurate to the millisecond.
 
 #### 🖥️ macOS UI
 *   NavigationStack-based audiobook player (keyboard shortcuts, sidebar stays visible).
-*   Preferences: Gemini key verify, per-book voice/speed defaults.
+*   Preferences: Gemini key verify, per-book voice/speed defaults, **new Account section** (signed-in email + sign out, or sign-in CTA when anonymous).
 *   NowPlayingBar / Continue Listening, global drag-and-drop PDF entry point.
 *   Smooth TTS preemption fade (120ms) when hotkey fires during audiobook playback.
+
+#### 🗄️ Backend & API (`himudigonda.me`)
+*   New endpoints: `POST /api/supersay/events` (telemetry ingest), `POST /api/supersay/auth/{google,email/signup,email/login,email/request-reset,email/confirm-reset,link-anon}`, `GET /api/supersay/metrics/{overview,daily,voices,retention,audiobook}`.
+*   Supabase schema: `supersay_users`, `supersay_events`, `supersay_daily_rollups` + `supersay_retention_cohorts` view + `compute_supersay_rollup()` function. RLS locks the user list to service-role only.
+*   Nightly Vercel cron at 03:15 UTC computes daily rollups; idempotent on re-run.
+*   In-memory token-bucket rate limiting: 60/min on `/events`, 5/min on `/auth/*`.
+*   Normalized error shape `{error: {code, message}}` across every `/api/supersay/*` route — no stack-trace leaks.
+*   Legacy `/api/telemetry` softened to log+drop so installed v1.x clients keep working silently during migration.
 
 #### 📦 Build
 *   PyInstaller cleanup: removed stale `google.ai` and `google.api_core` flags that caused harmless but noisy warnings.
