@@ -109,9 +109,19 @@ benchmark:
 # --- 🧪 TESTS ---
 test:
 	@echo "🧪 Testing Backend..."
-	cd backend && uv run pytest -v
+	cd backend && uv run pytest -q --no-cov
 	@echo "🧪 Testing Frontend..."
-	xcodebuild test -project $(PROJECT_PATH) -scheme $(SCHEME) -destination 'platform=macOS,arch=arm64'
+	xcodebuild test -project $(PROJECT_PATH) -scheme $(SCHEME) -destination 'platform=macOS,arch=arm64' -enableCodeCoverage YES
+
+test-coverage:
+	@echo "📊 Backend coverage..."
+	cd backend && uv run pytest --cov=app --cov-report=term-missing --cov-report=html:.coverage_html --cov-fail-under=80
+	@echo "📊 Backend coverage HTML at backend/.coverage_html/index.html"
+
+test-mutation:
+	@echo "🧬 Mutation testing (privacy modules)..."
+	cd backend && uv run mutmut run || true
+	cd backend && uv run mutmut results || true
 
 # --- 📦 RELEASES ---
 release: nuke backend
