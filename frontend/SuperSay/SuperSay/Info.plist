@@ -25,6 +25,8 @@
 	<string>SuperSay needs to control other apps to adjust music volume while speaking.</string>
 	<key>NSSupportsAutomaticGraphicsSwitching</key>
 	<true/>
+	<key>SuperSayGoogleClientID</key>
+	<string></string>
 	<key>LSEnvironment</key>
 	<dict>
 		<key>LLVM_PROFILE_FILE</key>
