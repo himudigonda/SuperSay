@@ -73,6 +73,11 @@ final class MetricsService {
         enqueue(event: "gemini_clean", props: ["pages": pages, "chars_out": charsOut])
     }
 
+    func trackInstallerDownloadStarted() { enqueue(event: "installer_download_started", props: [:]) }
+    func trackInstallerDownloadVerified() { enqueue(event: "installer_download_verified", props: [:]) }
+    func trackInstallerOpened() { enqueue(event: "installer_opened", props: [:]) }
+    func trackInstallerFailed() { enqueue(event: "installer_failed", props: [:]) }
+
     // MARK: - Core
 
     private func enqueue(event: String, props rawProps: [String: Any]) {
@@ -137,17 +142,19 @@ final class MetricsService {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = body
 
-        // Optimistic: clear the outbox once we hand the request to URLSession.
-        // If the request fails, individual events are lost (counts only — safe).
-        outbox.removeAll()
-        persistOutbox()
-
-        URLSession.shared.dataTask(with: request) { _, response, _ in
+        let batchNames = Set(batch.map { $0.id })
+        URLSession.shared.dataTask(with: request) { [weak self] _, response, _ in
+            guard let self else { return }
             #if DEBUG
             if let http = response as? HTTPURLResponse {
                 print("📡 Metrics: flushed \(batch.count) events → \(http.statusCode)")
             }
             #endif
+            guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { return }
+            self.queue.async {
+                self.outbox.removeAll { batchNames.contains($0.id) }
+                self.persistOutbox()
+            }
         }.resume()
     }
 
@@ -185,13 +192,23 @@ final class MetricsService {
 
 extension MetricsService {
     struct Event {
+        let id: String
         let name: String
         let props: [String: Any]
         let timestamp: Date
 
+        nonisolated init(id: String = UUID().uuidString, name: String, props: [String: Any], timestamp: Date) {
+            self.id = id
+            self.name = name
+            self.props = props
+            self.timestamp = timestamp
+        }
+
         nonisolated static let allowedNames: Set<String> = [
             "app_launch", "generation", "export",
             "audiobook_upload", "audiobook_play", "gemini_clean",
+            "installer_download_started", "installer_download_verified",
+            "installer_opened", "installer_failed",
         ]
 
         func serialized() -> [String: Any] {
@@ -199,6 +216,7 @@ extension MetricsService {
             let fmt = ISO8601DateFormatter()
             fmt.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
             return [
+                "event_id": id,
                 "event": name,
                 "ts": fmt.string(from: timestamp),
                 "props": props,
@@ -217,7 +235,7 @@ extension MetricsService {
             } else {
                 ts = Date()
             }
-            return Event(name: name, props: Props.whitelist(props), timestamp: ts)
+            return Event(id: raw["event_id"] as? String ?? UUID().uuidString, name: name, props: Props.whitelist(props), timestamp: ts)
         }
     }
 

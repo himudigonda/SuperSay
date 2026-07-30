@@ -332,7 +332,7 @@ class DashboardViewModel: ObservableObject {
         selectedFontName = newFont.familyName ?? "System Standard"
     }
 
-    /// SuperSay is frozen at v2.0.1. Keep this compatibility entry point from
+    /// SuperSay is frozen at v2.0.2. Keep this compatibility entry point from
     /// reaching a dead legacy update channel; direct any residual caller to the
     /// supported Voqora release instead.
     func checkForUpdates(manual: Bool = true) {

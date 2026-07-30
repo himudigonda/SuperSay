@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.0.2 — final Voqora handoff
+
+Released as SuperSay's last compatibility patch. It remains based only on the
+public legacy source line and excludes every private successor change.
+
+- Replaces the static migration link with a guided **Update to Voqora** action.
+  The action obtains Voqora's official GitHub release metadata, accepts exactly
+  one HTTPS DMG with GitHub's published SHA-256 digest, verifies the download,
+  and opens it in Finder for an explicit drag to Applications.
+- Keeps four clear migration paths in the app: the SuperSay story, the Voqora
+  story, the active Voqora GitHub project, and the verified Voqora installer.
+- Never installs, replaces, deletes, or changes Gatekeeper settings for either
+  app. SuperSay remains removable only when the person has confirmed Voqora
+  works for them.
+- Adds reliable outbox acknowledgement IDs so a concurrent telemetry event is
+  not accidentally discarded after another queued batch succeeds.
+- Records installer download, verification, Finder-open, and failure signals
+  as a handoff funnel, never as completed installations or unique people.
+
 ## v2.0.1 — final legacy release
 
 Released as SuperSay's last maintained build. This release is intentionally based only on the public `v2.0.0` source snapshot and excludes every private successor change.
@@ -33,4 +52,6 @@ Released as SuperSay's last maintained build. This release is intentionally base
 
 ## v2.0.0 — public source snapshot
 
-The original public release that serves as the complete code baseline for `v2.0.1`. Its previous release history is intentionally not carried forward as an active roadmap or support commitment.
+The original public release that serves as the complete code baseline for the
+final `v2.0.x` legacy line. Its previous release history is intentionally not
+carried forward as an active roadmap or support commitment.

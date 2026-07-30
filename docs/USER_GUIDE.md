@@ -1,6 +1,6 @@
 # SuperSay user guide
 
-> SuperSay is retired at `v2.0.1`. It remains usable as a legacy release; [Voqora](https://github.com/himudigonda/Voqora/releases/latest) is the current supported product.
+> SuperSay is retired at `v2.0.2`. It remains usable as a legacy release; [Voqora](https://github.com/himudigonda/Voqora/releases/latest) is the current supported product.
 
 ## Speak selected text
 

@@ -60,10 +60,14 @@ final class MetricsServiceTests: XCTestCase {
 
     func test_eventNames_allowedSetIsClosed() {
         let known = MetricsService.Event.allowedNames
-        XCTAssertEqual(known.count, 6)
+        XCTAssertEqual(known.count, 10)
         XCTAssertTrue(known.contains("generation"))
         XCTAssertTrue(known.contains("app_launch"))
         XCTAssertTrue(known.contains("audiobook_upload"))
+        XCTAssertTrue(known.contains("installer_download_started"))
+        XCTAssertTrue(known.contains("installer_download_verified"))
+        XCTAssertTrue(known.contains("installer_opened"))
+        XCTAssertTrue(known.contains("installer_failed"))
         XCTAssertFalse(known.contains("anything_else"))
     }
 

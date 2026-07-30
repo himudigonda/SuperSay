@@ -13,6 +13,7 @@ struct SuperSayWindow: View {
     @State private var globalDropHovering = false
     @State private var showOnboarding = false
     @State private var voqoraIsInstalled = false
+    @StateObject private var voqoraInstaller = VoqoraInstallerService()
 
     var body: some View {
         NavigationSplitView {
@@ -265,26 +266,44 @@ struct SuperSayWindow: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 10) {
-                if voqoraIsInstalled {
-                    Button("Reveal SuperSay") {
-                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
-                    }
-                    .buttonStyle(.bordered)
-                } else {
-                    Link(destination: URL(string: "https://github.com/himudigonda/Voqora/releases/latest")!) {
-                        Label("Download Voqora", systemImage: "arrow.down.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.cyan)
+                Button {
+                    voqoraInstaller.downloadAndOpenLatest()
+                } label: {
+                    Label(voqoraInstaller.state.isBusy ? "Preparing…" : "Update to Voqora", systemImage: "arrow.down.circle.fill")
                 }
+                .buttonStyle(.borderedProminent)
+                .tint(.cyan)
+                .disabled(voqoraInstaller.state.isBusy)
 
-                Link("GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
-                    .font(vm.appFont(size: 10, weight: .bold))
+                Link("Voqora on GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
             }
             .font(vm.appFont(size: 10, weight: .bold))
 
-            Link("Read the Voqora product story", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
+            HStack(spacing: 12) {
+                Link("Read about SuperSay", destination: URL(string: "https://himudigonda.me/blog/supersay")!)
+                Link("Read about Voqora", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
+                if voqoraIsInstalled {
+                    Button("Reveal SuperSay") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .font(vm.appFont(size: 10))
+
+            if let message = voqoraInstaller.state.message {
+                Text(message)
+                    .font(vm.appFont(size: 10))
+                    .foregroundStyle(voqoraInstaller.state.isFailure ? .red : .secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if case .failed = voqoraInstaller.state {
+                HStack(spacing: 10) {
+                    Button("Try again") { voqoraInstaller.reset(); voqoraInstaller.downloadAndOpenLatest() }
+                        .buttonStyle(.bordered)
+                    Link("Open GitHub releases", destination: VoqoraInstallerService.releasePageURL)
+                }
                 .font(vm.appFont(size: 10))
+            }
         }
         .padding(12)
         .background(Color.cyan.opacity(0.12))

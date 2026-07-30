@@ -9,6 +9,7 @@ CONFIG = Release
 BUILD_DIR = build
 APP_PATH = $(BUILD_DIR)/DerivedData/Build/Products/$(CONFIG)/SuperSay.app
 BUNDLE_ID = com.himudigonda.SuperSay
+XCODE_JOBS ?= 4
 
 .PHONY: all setup backend app run clean lint test test-backend test-swift test-ci format check-version release ship help
 
@@ -118,8 +119,9 @@ test-swift:
 		fi; \
 		echo "🧪 Running one serial Swift test host..."; \
 		xcodebuild test -project $(PROJECT_PATH) -scheme $(SCHEME) \
-			-destination 'platform=macOS,arch=arm64' \
-			-parallel-testing-enabled NO \
+		-destination 'platform=macOS,arch=arm64' \
+		-jobs $(XCODE_JOBS) \
+		-parallel-testing-enabled NO \
 			CODE_SIGNING_ALLOWED=NO
 
 test-ci: test-backend test-swift
@@ -127,7 +129,7 @@ test-ci: test-backend test-swift
 # --- 📦 RELEASES ---
 check-version:
 ifndef VERSION
-	$(error VERSION is required, e.g. `make release VERSION=2.0.1`)
+	$(error VERSION is required, e.g. `make release VERSION=2.0.2`)
 endif
 
 release: check-version backend
@@ -144,7 +146,7 @@ help:
 	@echo "SuperSay Management"
 	@echo "  make clean     Wipe build artifacts"
 	@echo "  make run       Build and launch fresh"
-	@echo "  make release VERSION=2.0.1  Build the final legacy DMG without a user-data wipe"
+	@echo "  make release VERSION=2.0.2  Build the final legacy DMG without a user-data wipe"
 	@echo "  make test      Run fast backend tests only"
 	@echo "  make test-swift Run one serial macOS test host"
 	@echo "  make test-ci   Run backend and serial macOS tests"
