@@ -1,12 +1,17 @@
 from unittest.mock import patch
 
 import numpy as np
+from app.core.config import Settings
 from app.main import app
 from app.services.audio import AudioService
 from app.services.engine_manager import EngineManager
 from fastapi.testclient import TestClient
 
 client = TestClient(app)
+
+
+def test_default_server_bind_is_loopback_only():
+    assert Settings().HOST == "127.0.0.1"
 
 
 # Helper to mock the async generator

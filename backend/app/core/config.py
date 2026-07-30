@@ -7,7 +7,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     PROJECT_NAME: str = "SuperSay Backend"
     VERSION: str = "1.0.0"
-    HOST: str = "0.0.0.0"
+    # The bundled service is a private companion for the macOS app. Binding to
+    # loopback keeps the local HTTP API off the LAN while retaining the same
+    # `localhost:10101` contract used by the Swift client.
+    HOST: str = "127.0.0.1"
     PORT: int = 10101
 
     # Paths
