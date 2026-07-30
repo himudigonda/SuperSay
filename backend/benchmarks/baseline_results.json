@@ -1,0 +1,79 @@
+[
+  {
+    "scenario": "1_Short_Many",
+    "chars": 208,
+    "ttfa": 364.97187499844586,
+    "rtf": 0.2146860665426383,
+    "throughput_x": 4.657964143198797,
+    "mem_peak": 608.203125,
+    "chunks": 15,
+    "wall_time": 5.310474541998701,
+    "description": "Short sentences (3 words), high volume (15 count)"
+  },
+  {
+    "scenario": "2_Short_Few",
+    "chars": 40,
+    "ttfa": 683.4973330005596,
+    "rtf": 0.3195448835783157,
+    "throughput_x": 3.1294508264436502,
+    "mem_peak": 439.734375,
+    "chunks": 3,
+    "wall_time": 1.5644917499994335,
+    "description": "Short sentences (3 words), low volume (3 count)"
+  },
+  {
+    "scenario": "3_Med_Many",
+    "chars": 578,
+    "ttfa": 1080.4045000004407,
+    "rtf": 0.22644546544018046,
+    "throughput_x": 4.416074298755024,
+    "mem_peak": 509.765625,
+    "chunks": 10,
+    "wall_time": 8.5747349580015,
+    "description": "Medium sentences (10 words), high volume (10 count)"
+  },
+  {
+    "scenario": "4_Med_Few",
+    "chars": 172,
+    "ttfa": 824.0381670002535,
+    "rtf": 0.21760911091552745,
+    "throughput_x": 4.5953958259963885,
+    "mem_peak": 512.03125,
+    "chunks": 3,
+    "wall_time": 2.472039500000392,
+    "description": "Medium sentences (10 words), low volume (3 count)"
+  },
+  {
+    "scenario": "5_Long_Many",
+    "chars": 813,
+    "ttfa": 2281.7722920008237,
+    "rtf": 0.22755871456185808,
+    "throughput_x": 4.394470244417585,
+    "mem_peak": 766.1875,
+    "chunks": 5,
+    "wall_time": 12.007818250000128,
+    "description": "Long sentences (30 words), high volume (5 count)"
+  },
+  {
+    "scenario": "6_Long_Few",
+    "chars": 161,
+    "ttfa": 3256.918584000232,
+    "rtf": 0.3081094893730039,
+    "throughput_x": 3.2455994848940817,
+    "mem_peak": 692.03125,
+    "chunks": 1,
+    "wall_time": 3.2569227089989,
+    "description": "Long sentence (30 words), single instance"
+  },
+  {
+    "scenario": "7_Mixed_Bag",
+    "chars": 122,
+    "ttfa": 397.197916998266,
+    "rtf": 0.22909422394816717,
+    "throughput_x": 4.365016204975343,
+    "mem_peak": 696.6875,
+    "chunks": 4,
+    "wall_time": 2.4974325000002864,
+    "description": "Mixed sentence lengths"
+  }
+]
