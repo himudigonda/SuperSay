@@ -82,74 +82,11 @@ struct SuperSayWindow: View {
                 }
                 .listStyle(.sidebar)
                 .scrollContentBackground(.hidden)
-
-                Spacer()
-
-                // SYSTEM / PREFERENCES AT BOTTOM
-                VStack(spacing: 8) {
-                    Divider().padding(.horizontal, 20).opacity(0.3)
-
-                    Button {
-                        vm.selectedTab = "preferences"
-                    } label: {
-                        HStack {
-                            Image(systemName: "gearshape.fill")
-                            Text("Preferences")
-                                .font(vm.appFont(size: 13, weight: .medium))
-                            Spacer()
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 12)
-                        .background(vm.selectedTab == "preferences" ? Color.cyan.opacity(0.15) : Color.clear)
-                        .foregroundStyle(vm.selectedTab == "preferences" ? .cyan : .primary)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                    }
-                    .buttonStyle(.plain)
-                    .padding(.horizontal, 16)
-                }
-                .padding(.bottom, 8)
-
-                // DEVELOPER ATTRIBUTION
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("DEVELOPED BY")
-                        .font(vm.appFont(size: 8, weight: .black))
-                        .kerning(1)
-                        .foregroundStyle(.secondary.opacity(0.5))
-
-                    Text("Himansh Mudigonda")
-                        .font(vm.appFont(size: 11, weight: .bold))
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: 18) {
-                        Link(destination: URL(string: "https://github.com/himudigonda")!) {
-                            Image("github") // Explicit Asset
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 36, height: 36)
-                        }
-                        .help("GitHub")
-
-                        Link(destination: URL(string: "https://www.linkedin.com/in/himudigonda")!) {
-                            Image("linkedin") // Explicit Asset
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 36, height: 36)
-                        }
-                        .help("LinkedIn")
-
-                        Link(destination: URL(string: "https://himudigonda.me")!) {
-                            Image(systemName: "globe") // System Icon
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .frame(width: 28, height: 28)
-                                .padding(4)
-                        }
-                        .help("Website")
-                    }
-                    .foregroundStyle(.cyan)
-                }
-                .padding(24)
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                sidebarFooter
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         } detail: {
             ZStack(alignment: .bottom) {
@@ -265,26 +202,24 @@ struct SuperSayWindow: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
 
-            HStack(spacing: 10) {
-                Button {
-                    voqoraInstaller.downloadAndOpenLatest()
-                } label: {
-                    Label(voqoraInstaller.state.isBusy ? "Preparing…" : "Update to Voqora", systemImage: "arrow.down.circle.fill")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    updateVoqoraButton
+                    voqoraGitHubLink
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.cyan)
-                .disabled(voqoraInstaller.state.isBusy)
-
-                Link("Voqora on GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
+                VStack(alignment: .leading, spacing: 8) {
+                    updateVoqoraButton
+                    voqoraGitHubLink
+                }
             }
             .font(vm.appFont(size: 10, weight: .bold))
 
-            HStack(spacing: 12) {
-                Link("Read about SuperSay", destination: URL(string: "https://himudigonda.me/blog/supersay")!)
-                Link("Read about Voqora", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
-                if voqoraIsInstalled {
-                    Button("Reveal SuperSay") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
-                        .buttonStyle(.plain)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) {
+                    migrationArticleLinks
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    migrationArticleLinks
                 }
             }
             .font(vm.appFont(size: 10))
@@ -310,6 +245,102 @@ struct SuperSayWindow: View {
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .padding(.horizontal, 16)
         .padding(.bottom, 8)
+    }
+
+    private var updateVoqoraButton: some View {
+        Button {
+            voqoraInstaller.downloadAndOpenLatest()
+        } label: {
+            Label(voqoraInstaller.state.isBusy ? "Preparing…" : "Update to Voqora", systemImage: "arrow.down.circle.fill")
+                .lineLimit(1)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.cyan)
+        .disabled(voqoraInstaller.state.isBusy)
+    }
+
+    private var voqoraGitHubLink: some View {
+        Link("Voqora on GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
+    }
+
+    @ViewBuilder
+    private var migrationArticleLinks: some View {
+        Link("Read about SuperSay", destination: URL(string: "https://himudigonda.me/blog/supersay")!)
+        Link("Read about Voqora", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
+        if voqoraIsInstalled {
+            Button("Reveal SuperSay") { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) }
+                .buttonStyle(.plain)
+        }
+    }
+
+    private var sidebarFooter: some View {
+        VStack(spacing: 8) {
+            Divider()
+                .padding(.horizontal, 20)
+                .opacity(0.3)
+
+            Button {
+                vm.selectedTab = "preferences"
+            } label: {
+                HStack {
+                    Image(systemName: "gearshape.fill")
+                    Text("Preferences")
+                        .font(vm.appFont(size: 13, weight: .medium))
+                    Spacer(minLength: 0)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(vm.selectedTab == "preferences" ? Color.cyan.opacity(0.15) : Color.clear)
+                .foregroundStyle(vm.selectedTab == "preferences" ? .cyan : .primary)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 16)
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("DEVELOPED BY")
+                    .font(vm.appFont(size: 8, weight: .black))
+                    .kerning(1)
+                    .foregroundStyle(.secondary.opacity(0.5))
+
+                Text("Himansh Mudigonda")
+                    .font(vm.appFont(size: 11, weight: .bold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+
+                HStack(spacing: 18) {
+                    Link(destination: URL(string: "https://github.com/himudigonda")!) {
+                        Image("github")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 36, height: 36)
+                    }
+                    .help("GitHub")
+
+                    Link(destination: URL(string: "https://www.linkedin.com/in/himudigonda")!) {
+                        Image("linkedin")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 36, height: 36)
+                    }
+                    .help("LinkedIn")
+
+                    Link(destination: URL(string: "https://himudigonda.me")!) {
+                        Image(systemName: "globe")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 28, height: 28)
+                            .padding(4)
+                    }
+                    .help("Website")
+                }
+                .foregroundStyle(.cyan)
+            }
+            .padding(.horizontal, 24)
+        }
+        .padding(.bottom, 8)
+        .background(.bar)
     }
 
     private static func isVoqoraInstalled() -> Bool {

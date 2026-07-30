@@ -2,7 +2,7 @@
 
 > ## SuperSay is retired. Voqora is the current product.
 >
-> SuperSay remains available as its final, archived `v2.0.2` release. It receives no future features or development. For the supported product experience, download [Voqora](https://github.com/himudigonda/Voqora/releases/latest).
+> SuperSay remains available as its final, archived `v2.0.3` release. It receives no future features or development. For the supported product experience, download [Voqora](https://github.com/himudigonda/Voqora/releases/latest).
 
 SuperSay is an earlier public native macOS text-to-speech product built by Himansh Mudigonda. It turns selected text into local speech and can create audiobooks from supported documents. This repository preserves the final legacy release for people who already use it and for anyone who wants to inspect the source.
 
@@ -32,7 +32,7 @@ It does **not** include Voqora features or any private successor work.
 
 ## Install the archived app
 
-1. Download the `SuperSay-2.0.2.dmg` asset from the final release.
+1. Download the `SuperSay-2.0.3.dmg` asset from the final release.
 2. Drag `SuperSay.app` to `/Applications`.
 3. If macOS still blocks this archived build after choosing **Open** from the contextual menu, run this scoped command:
 
@@ -50,6 +50,6 @@ See [PRIVACY.md](./PRIVACY.md) for the final release's exact network contract.
 
 ## Development and licence
 
-This repository is archived after `v2.0.2`; pull requests and new feature requests are not accepted. The final source remains available under the [MIT License](./LICENSE). Existing releases remain governed by the licences distributed with those releases.
+This repository is archived after `v2.0.3`; pull requests and new feature requests are not accepted. The final source remains available under the [MIT License](./LICENSE). Existing releases remain governed by the licences distributed with those releases.
 
 For the active codebase, releases, and issues, use [Voqora](https://github.com/himudigonda/Voqora).

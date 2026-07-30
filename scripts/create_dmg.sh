@@ -5,7 +5,7 @@ set -euo pipefail
 # SuperSay DMG Builder
 # ========================================
 APP_NAME="SuperSay"
-VERSION="${1:-2.0.2}"
+VERSION="${1:-2.0.3}"
 DMG_NAME="${APP_NAME}-${VERSION}"
 BUILD_DIR="build"
 XCODE_PROJECT_DIR="frontend/SuperSay"

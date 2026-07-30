@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.3 — resize-safe Voqora handoff
+
+Hotfix for the final legacy release. The migration banner now reflows its
+actions at narrow sidebar widths, and the preferences/developer footer is
+reserved with a native safe-area inset instead of competing with the library
+list during window resizing.
+
 ## v2.0.2 — final Voqora handoff
 
 Released as SuperSay's last compatibility patch. It remains based only on the

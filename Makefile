@@ -129,7 +129,7 @@ test-ci: test-backend test-swift
 # --- 📦 RELEASES ---
 check-version:
 ifndef VERSION
-	$(error VERSION is required, e.g. `make release VERSION=2.0.2`)
+	$(error VERSION is required, e.g. `make release VERSION=2.0.3`)
 endif
 
 release: check-version backend
@@ -146,7 +146,7 @@ help:
 	@echo "SuperSay Management"
 	@echo "  make clean     Wipe build artifacts"
 	@echo "  make run       Build and launch fresh"
-	@echo "  make release VERSION=2.0.2  Build the final legacy DMG without a user-data wipe"
+	@echo "  make release VERSION=2.0.3  Build the final legacy DMG without a user-data wipe"
 	@echo "  make test      Run fast backend tests only"
 	@echo "  make test-swift Run one serial macOS test host"
 	@echo "  make test-ci   Run backend and serial macOS tests"

@@ -1,6 +1,8 @@
 # Final legacy release
 
-`v2.0.2` is SuperSay's final release. The release workflow is intentionally closed after its source, installer, and README are verified.
+`v2.0.3` is SuperSay's final release. It is a resize-safety hotfix on top of
+`v2.0.2`; the release workflow remains intentionally closed after its source,
+installer, and README are verified.
 
 The legacy app does not offer self-updates. Its guided **Update to Voqora**
 action verifies and opens Voqora's current GitHub DMG in Finder. It also
