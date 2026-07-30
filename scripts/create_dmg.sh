@@ -11,6 +11,9 @@ BUILD_DIR="build"
 XCODE_PROJECT_DIR="frontend/SuperSay"
 STAGING_DIR="${BUILD_DIR}/dmg-staging"
 SIGNING_IDENTITY="${DEVELOPER_ID_APPLICATION:--}"
+# Keep release archiving bounded on a developer machine. Override explicitly
+# only when the machine is reserved for a release build.
+XCODE_JOBS="${XCODE_JOBS:-4}"
 
 # Locate Xcode: prefer full Xcode.app over CommandLineTools so xcodebuild works.
 if [ -d "/Applications/Xcode.app/Contents/Developer" ]; then
@@ -31,6 +34,7 @@ rm -rf "${BUILD_DIR}/${APP_NAME}.xcarchive"
 xcodebuild -project "${XCODE_PROJECT_DIR}/SuperSay.xcodeproj" \
     -scheme "SuperSay" \
     -configuration Release \
+    -jobs "$XCODE_JOBS" \
     -derivedDataPath "${BUILD_DIR}/DerivedData" \
     -archivePath "${BUILD_DIR}/${APP_NAME}.xcarchive" \
     MARKETING_VERSION="${VERSION}" \

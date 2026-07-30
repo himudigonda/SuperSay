@@ -52,13 +52,6 @@ final class BackendService: NSObject, @unchecked Sendable {
             return
         }
 
-        // Kill any stale instance left over from a previous session / crash
-        let cleanup = Process()
-        cleanup.launchPath = "/usr/bin/pkill"
-        cleanup.arguments = ["-f", "SuperSayServer"]
-        try? cleanup.run()
-        cleanup.waitUntilExit()
-
         let p = Process()
         p.executableURL = executableURL
 
@@ -127,15 +120,6 @@ final class BackendService: NSObject, @unchecked Sendable {
             processPipe = nil
         }
 
-        let task = Process()
-        task.launchPath = "/usr/bin/pkill"
-        task.arguments = ["-9", "-f", "SuperSayServer"]
-        do {
-            try task.run()
-            task.waitUntilExit()
-        } catch {
-            // Silently ignore if pkill fails (process may not exist)
-        }
     }
 
     func exportLogs() {

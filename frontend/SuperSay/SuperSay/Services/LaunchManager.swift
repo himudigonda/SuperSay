@@ -78,12 +78,20 @@ class LaunchManager: ObservableObject {
                 unzip.arguments = ["-o", "-q", zipPath, "-d", appSupportPath]
                 try unzip.run()
                 unzip.waitUntilExit()
+                guard unzip.terminationStatus == 0 else {
+                    throw CocoaError(.fileReadCorruptFile)
+                }
 
                 let chmod = Process()
                 chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
                 chmod.arguments = ["755", execPath]
                 try chmod.run()
                 chmod.waitUntilExit()
+                guard chmod.terminationStatus == 0,
+                      fm.isExecutableFile(atPath: execPath)
+                else {
+                    throw CocoaError(.fileNoSuchFile)
+                }
 
                 // Stamp version so the next launch takes the fast path.
                 try currentVersion.write(

@@ -12,6 +12,8 @@ SuperSay is an earlier public native macOS text-to-speech product built by Himan
 2. Open Voqora. If SuperSay is present in `/Applications` or `~/Applications`, Voqora offers to import compatible playback and appearance preferences.
 3. Confirm that Voqora works for you, then move SuperSay to Trash when you are ready. Neither app removes the other automatically.
 
+SuperSay does not check a legacy update channel. Its in-app handoff links directly to the current [Voqora release](https://github.com/himudigonda/Voqora/releases/latest), [Voqora project](https://github.com/himudigonda/Voqora), and [Voqora product story](https://himudigonda.me/blog/voqora).
+
 SuperSay and Voqora report separate anonymous installation counts. They are not presented as a deduplicated people count unless a user deliberately provides a legitimate shared identity.
 
 ## What this final release does

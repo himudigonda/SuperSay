@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -193,14 +194,8 @@ struct SuperSayWindow: View {
         }
         .frame(minWidth: 800, minHeight: 600)
         .preferredColorScheme(vm.appTheme == "system" ? nil : (vm.appTheme == "dark" ? .dark : .light))
-        .sheet(isPresented: $vm.showUpdateSheet) {
-            UpdateView()
-                .environmentObject(vm)
-        }
         .onAppear {
             guard !RuntimeEnvironment.isRunningTests else { return }
-            // Background check for updates on startup
-            vm.checkForUpdates(manual: false)
 
             // Prepare backend if needed
             Task {
@@ -215,6 +210,9 @@ struct SuperSayWindow: View {
                 }
             }
 
+            voqoraIsInstalled = Self.isVoqoraInstalled()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             voqoraIsInstalled = Self.isVoqoraInstalled()
         }
         .sheet(isPresented: $showOnboarding) {
@@ -260,16 +258,33 @@ struct SuperSayWindow: View {
                 .font(vm.appFont(size: 12, weight: .bold))
                 .foregroundStyle(.cyan)
             Text(voqoraIsInstalled
-                 ? "Voqora is installed. You can safely move SuperSay to Trash when you are ready."
-                 : "Voqora is the supported successor. New features and updates now ship there.")
+                 ? "Voqora is installed. Confirm it works, then move SuperSay to Trash when you are ready."
+                 : "Voqora is the supported app. New features and updates now ship there.")
                 .font(vm.appFont(size: 10))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if !voqoraIsInstalled {
-                Link("Get Voqora", destination: URL(string: "https://github.com/himudigonda/Voqora/releases/latest")!)
-                    .font(vm.appFont(size: 11, weight: .bold))
-                    .foregroundStyle(.white)
+
+            HStack(spacing: 10) {
+                if voqoraIsInstalled {
+                    Button("Reveal SuperSay") {
+                        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
+                    }
+                    .buttonStyle(.bordered)
+                } else {
+                    Link(destination: URL(string: "https://github.com/himudigonda/Voqora/releases/latest")!) {
+                        Label("Download Voqora", systemImage: "arrow.down.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.cyan)
+                }
+
+                Link("GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
+                    .font(vm.appFont(size: 10, weight: .bold))
             }
+            .font(vm.appFont(size: 10, weight: .bold))
+
+            Link("Read the Voqora product story", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
+                .font(vm.appFont(size: 10))
         }
         .padding(12)
         .background(Color.cyan.opacity(0.12))

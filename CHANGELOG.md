@@ -10,6 +10,8 @@ Released as SuperSay's last maintained build. This release is intentionally base
 - Points people to Voqora as the current supported product without claiming that the two products are the same app.
 - Detects a Voqora installation and explains that SuperSay can be removed manually after Voqora is confirmed working.
 - Keeps SuperSay's local text-to-speech and audiobook capabilities available as a frozen legacy product.
+- Removes SuperSay's obsolete self-update path. The app now presents the Voqora release, project, and product-story links directly instead of checking a frozen update channel.
+- Makes backend extraction fail visibly when the bundled archive cannot be unpacked or made executable, rather than showing a false ready state.
 
 ### Accounts and privacy
 

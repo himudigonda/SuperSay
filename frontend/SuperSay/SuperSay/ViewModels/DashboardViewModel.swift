@@ -332,48 +332,14 @@ class DashboardViewModel: ObservableObject {
         selectedFontName = newFont.familyName ?? "System Standard"
     }
 
-    /// --- UPDATE CHECKER ---
+    /// SuperSay is frozen at v2.0.1. Keep this compatibility entry point from
+    /// reaching a dead legacy update channel; direct any residual caller to the
+    /// supported Voqora release instead.
     func checkForUpdates(manual: Bool = true) {
-        Task {
-            // Fetch ALL releases to aggregate changelogs
-            guard let url = URL(string: "https://api.github.com/repos/himudigonda/SuperSay/releases") else { return }
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let releases = try JSONDecoder().decode([GitHubRelease].self, from: data)
-
-                let currentVersion = "v" + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
-
-                // Filter releases newer than current
-                let newer = releases.filter { $0.tagName != currentVersion && isNewer($0.tagName, than: currentVersion) }
-
-                if let latest = newer.first {
-                    print("🚀 New version available: \(latest.tagName)")
-                    self.availableUpdate = latest
-                    self.allRelevantReleases = newer
-                    self.hasUpdate = true
-                    self.showUpdateSheet = true
-                } else if manual {
-                    let alert = NSAlert()
-                    alert.messageText = "You're Up to Date"
-                    alert.informativeText = "SuperSay \(currentVersion) is the latest version."
-                    alert.addButton(withTitle: "OK")
-                    alert.runModal()
-                }
-            } catch {
-                print("❌ Update check failed: \(error)")
-            }
-        }
-    }
-
-    private func isNewer(_ version: String, than current: String) -> Bool {
-        let v1 = version.replacingOccurrences(of: "v", with: "").split(separator: ".").compactMap { Int($0) }
-        let v2 = current.replacingOccurrences(of: "v", with: "").split(separator: ".").compactMap { Int($0) }
-
-        for i in 0 ..< min(v1.count, v2.count) {
-            if v1[i] > v2[i] { return true }
-            if v1[i] < v2[i] { return false }
-        }
-        return v1.count > v2.count
+        guard manual,
+              let destination = URL(string: "https://github.com/himudigonda/Voqora/releases/latest")
+        else { return }
+        NSWorkspace.shared.open(destination)
     }
 
     func exportLogs() {

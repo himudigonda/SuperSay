@@ -26,12 +26,16 @@ struct PreferencesView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         Text("SuperSay is retired")
                             .font(vm.appFont(size: 14, weight: .bold))
-                        Text("This final legacy release receives no new features. Voqora is the supported successor for the current product experience.")
+                        Text("This final legacy release receives no new features. Install Voqora, confirm it works, then move SuperSay to Trash when you are ready. SuperSay never removes itself automatically.")
                             .font(vm.appFont(size: 11))
                             .foregroundStyle(.secondary)
-                        Link("Download Voqora", destination: URL(string: "https://github.com/himudigonda/Voqora/releases/latest")!)
-                            .font(vm.appFont(size: 12, weight: .bold))
-                            .foregroundStyle(.cyan)
+                        HStack(spacing: 14) {
+                            Link("Download Voqora", destination: URL(string: "https://github.com/himudigonda/Voqora/releases/latest")!)
+                            Link("Visit Voqora on GitHub", destination: URL(string: "https://github.com/himudigonda/Voqora")!)
+                            Link("Read the Voqora blog", destination: URL(string: "https://himudigonda.me/blog/voqora")!)
+                        }
+                        .font(vm.appFont(size: 12, weight: .bold))
+                        .foregroundStyle(.cyan)
                     }
                 }
 
@@ -313,13 +317,9 @@ struct PreferencesView: View {
                         Divider()
 
                         HStack {
-                            Button {
-                                vm.checkForUpdates()
-                            } label: {
-                                Label("Check for Updates...", systemImage: "arrow.triangle.2.circlepath")
-                                    .font(vm.appFont(size: 13, weight: .medium))
-                            }
-                            .buttonStyle(.plain)
+                            Label("Frozen legacy release", systemImage: "lock.fill")
+                                .font(vm.appFont(size: 13, weight: .medium))
+                                .foregroundStyle(.secondary)
 
                             Spacer()
 
