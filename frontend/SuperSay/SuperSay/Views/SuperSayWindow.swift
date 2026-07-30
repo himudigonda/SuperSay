@@ -34,8 +34,8 @@ struct SuperSayWindow: View {
                             .font(vm.appFont(size: 16, weight: .bold))
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 18)
 
                 legacyStatusBanner
 
@@ -87,7 +87,7 @@ struct SuperSayWindow: View {
                 sidebarFooter
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
+            .navigationSplitViewColumnWidth(min: 220, ideal: 240, max: 280)
         } detail: {
             ZStack(alignment: .bottom) {
                 // MAIN CONTENT
@@ -274,7 +274,7 @@ struct SuperSayWindow: View {
     }
 
     private var sidebarFooter: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             Divider()
                 .padding(.horizontal, 20)
                 .opacity(0.3)
@@ -282,22 +282,20 @@ struct SuperSayWindow: View {
             Button {
                 vm.selectedTab = "preferences"
             } label: {
-                HStack {
-                    Image(systemName: "gearshape.fill")
-                    Text("Preferences")
-                        .font(vm.appFont(size: 13, weight: .medium))
-                    Spacer(minLength: 0)
-                }
-                .padding(.vertical, 8)
-                .padding(.horizontal, 12)
-                .background(vm.selectedTab == "preferences" ? Color.cyan.opacity(0.15) : Color.clear)
-                .foregroundStyle(vm.selectedTab == "preferences" ? .cyan : .primary)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                Label("Preferences", systemImage: "gearshape.fill")
+                    .font(vm.appFont(size: 13, weight: .medium))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 10)
+                    .background(vm.selectedTab == "preferences" ? Color.cyan.opacity(0.15) : Color.clear)
+                    .foregroundStyle(vm.selectedTab == "preferences" ? .cyan : .primary)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
+            .contentShape(Rectangle())
             .padding(.horizontal, 16)
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text("DEVELOPED BY")
                     .font(vm.appFont(size: 8, weight: .black))
                     .kerning(1)
@@ -309,12 +307,12 @@ struct SuperSayWindow: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
 
-                HStack(spacing: 18) {
+                HStack(spacing: 14) {
                     Link(destination: URL(string: "https://github.com/himudigonda")!) {
                         Image("github")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 26, height: 26)
                     }
                     .help("GitHub")
 
@@ -322,7 +320,7 @@ struct SuperSayWindow: View {
                         Image("linkedin")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 36, height: 36)
+                            .frame(width: 26, height: 26)
                     }
                     .help("LinkedIn")
 
@@ -330,16 +328,16 @@ struct SuperSayWindow: View {
                         Image(systemName: "globe")
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .frame(width: 28, height: 28)
-                            .padding(4)
+                            .frame(width: 22, height: 22)
+                            .padding(2)
                     }
                     .help("Website")
                 }
                 .foregroundStyle(.cyan)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 20)
         }
-        .padding(.bottom, 8)
+        .padding(.bottom, 12)
         .background(.bar)
     }
 

@@ -185,6 +185,8 @@ struct SuperSayApp: App {
             }
         }
         .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1200, height: 800)
+        .windowResizability(.contentMinSize)
         .handlesExternalEvents(matching: ["dashboard"])
 
         MenuBarExtra(isInserted: $showMenuBarIcon) {
