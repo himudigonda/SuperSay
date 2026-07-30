@@ -2,7 +2,7 @@
 
 ## v2.0.1 — final legacy release
 
-Released as SuperSay's last maintained build. This release is intentionally based only on the public `v2.0.0` source snapshot. It contains no private multilingual or successor work.
+Released as SuperSay's last maintained build. This release is intentionally based only on the public `v2.0.0` source snapshot and excludes every private successor change.
 
 ### Product status
 
