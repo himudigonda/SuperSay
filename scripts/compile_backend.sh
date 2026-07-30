@@ -2,6 +2,12 @@
 set -e
 echo "🚀 STARTING BACKEND BUILD..."
 
+# Models are not committed because Git is a poor transport for large binary
+# assets. The fetch helper supplies the exact legacy assets and verifies both
+# digests before PyInstaller sees them.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+"$SCRIPT_DIR/fetch_models.sh"
+
 # 1. Cleanup
 pkill -9 SuperSayServer || true
 rm -rf backend/dist backend/build

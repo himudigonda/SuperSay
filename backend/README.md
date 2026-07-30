@@ -22,7 +22,7 @@ bf_emma,  bf_isabella       (British female)
 bm_george, bm_lewis         (British male)
 ```
 
-Defined in `app/services/engine_manager.py` (`KOKORO_VOICES`). The server-side telemetry whitelist in `himudigonda.me/lib/supersay-validate.js` mirrors this list — keep them in sync when adding voices.
+Defined in `app/services/engine_manager.py` (`KOKORO_VOICES`). This archived release does not accept new voices or feature work.
 
 ## 🔌 Internal API
 
@@ -62,13 +62,14 @@ The FastAPI `CorrelationMiddleware` in `app/api/middleware.py` generates `cid` p
 
 ## 📦 Compilation
 
-Custom PyInstaller spec bundles `espeak-ng` binaries and the ONNX models. Run `./scripts/compile_backend.sh` to produce the `SuperSayServer` binary; `make backend` zips it into `Resources/SuperSayServer.zip` for the Swift app to extract on first launch.
+Custom PyInstaller spec bundles `espeak-ng` binaries and the ONNX models. The public source intentionally omits the 338 MB model assets. `make setup` or `make backend` runs `scripts/fetch_models.sh`, which downloads the pinned `model-files-v1.0` assets from the `kokoro-onnx` upstream release and verifies their SHA-256 digests before compilation. The assets remain ignored by Git.
+
+Run `./scripts/compile_backend.sh` to produce the `SuperSayServer` binary; `make backend` zips it into `Resources/SuperSayServer.zip` for the Swift app to extract on first launch.
 
 ## 🧪 Tests
 
 ```bash
-cd backend && uv run pytest -q
-# 93 passed in ~5s
+make test-backend
 ```
 
 Coverage includes the new `app/core/logging.py` (JSON shape, non-serializable extras, correlation-id context).

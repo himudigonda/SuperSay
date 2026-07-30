@@ -19,6 +19,8 @@ all: run
 setup:
 	@echo "📦 Installing Python Dependencies..."
 	cd backend && uv sync
+	@echo "📦 Fetching pinned local speech models..."
+	./scripts/fetch_models.sh
 	@echo "📦 Checking Swift Environment..."
 	xcode-select -p || echo "⚠️ Xcode not found!"
 	@echo "✅ Setup Complete."
@@ -29,6 +31,7 @@ backend:
 	@echo "🚀 [1/3] Building Python Backend..."
 	@echo "------------------------------------------------"
 	chmod +x scripts/compile_backend.sh
+	chmod +x scripts/fetch_models.sh
 	./scripts/compile_backend.sh
 
 # --- 🍎 FRONTEND ---
